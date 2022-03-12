@@ -1,0 +1,544 @@
+LLFlow(
+  (RRDB): ConEncoder1(
+    (conv_first): Conv2d(12, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv_second): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (RRDB_trunk): Sequential(
+      (0): RRDB(
+        (RDB1): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB2): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB3): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+      )
+      (1): RRDB(
+        (RDB1): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB2): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB3): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+      )
+      (2): RRDB(
+        (RDB1): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB2): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB3): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+      )
+      (3): RRDB(
+        (RDB1): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB2): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (RDB3): ResidualDenseBlock_5C(
+          (conv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv2): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv3): Conv2d(96, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv4): Conv2d(128, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (conv5): Conv2d(160, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+      )
+    )
+    (trunk_conv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (downconv1): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (downconv2): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (downconv3): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (HRconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv_last): Conv2d(32, 3, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (lrelu): LeakyReLU(negative_slope=0.2, inplace=True)
+    (awb_para): Linear(in_features=32, out_features=3, bias=True)
+    (fine_tune_color_map): Sequential(
+      (0): Conv2d(32, 3, kernel_size=(1, 1), stride=(1, 1))
+      (1): Sigmoid()
+    )
+  )
+  (flowUpsamplerNet): FlowUpsamplerNet(
+    (layers): ModuleList(
+      (0): SqueezeLayer()
+      (1): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+      )
+      (2): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+      )
+      (3): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              70, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 12, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 24, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (4): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              70, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 12, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 24, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (5): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              70, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 12, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 24, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (6): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              70, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 12, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 24, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (7): SqueezeLayer()
+      (8): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+      )
+      (9): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+      )
+      (10): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              88, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (11): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              88, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (12): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              88, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (13): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              88, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (14): SqueezeLayer()
+      (15): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+      )
+      (16): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+      )
+      (17): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              160, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (18): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              160, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (19): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              160, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+      (20): FlowStep(
+        (actnorm): ActNorm2d()
+        (invconv): InvertibleConv1x1()
+        (affine): CondAffineSeparatedAndCond(
+          (fAffine): Sequential(
+            (0): Conv2d(
+              160, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+          (fFeatures): Sequential(
+            (0): Conv2d(
+              64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (1): ReLU()
+            (2): Conv2d(
+              64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False
+              (actnorm): ActNorm2d()
+            )
+            (3): ReLU()
+            (4): Conv2dZeros(64, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          )
+        )
+      )
+    )
+    (f): Sequential(
+      (0): Conv2d(128, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (max_pool): MaxPool2d(kernel_size=3, stride=3, padding=0, dilation=1, ceil_mode=False)
+)
+

@@ -10,7 +10,6 @@ import torch.nn.functional as F
 import numpy as np
 from models.modules.RRDBNet_arch import RRDBNet
 from models.modules.ConditionEncoder import ConEncoder1
-#, NoEncoder
 from models.modules.FlowUpsamplerNet import FlowUpsamplerNet
 import models.modules.thops as thops
 import models.modules.flow as flow
@@ -98,39 +97,11 @@ class LLFlow(nn.Module):
                 lr_enc=None,
                 add_gt_noise=False, step=None, y_label=None, align_condition_feature=False, get_color_map=False):
 
-        # print("get_color_map:", get_color_map, "reverse:", reverse, "reverse_with_grad:", reverse_with_grad)
-        # get_color_map: False reverse: True reverse_with_grad: False
 
         with torch.no_grad():
             return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
                                      add_gt_noise=add_gt_noise)
-        # if get_color_map:
-        #     color_lr = self.color_map_encoder(lr)
-        #     color_gt = nn.functional.avg_pool2d(gt, 11, 1, 5)
-        #     color_gt = color_gt / torch.sum(color_gt, 1, keepdim=True)
-        #     return color_lr, color_gt
-        # if not reverse:
-        #     if epses is not None and gt.device.index is not None:
-        #         epses = epses[gt.device.index]
-        #     return self.normal_flow(gt, lr, epses=epses, lr_enc=lr_enc, add_gt_noise=add_gt_noise, step=step,
-        #                             y_onehot=y_label, align_condition_feature=align_condition_feature)
-        # else:
-        #     # assert lr.shape[0] == 1
-        #     assert lr.shape[1] == 3 or lr.shape[1] == 6
-        #     # assert lr.shape[2] == 20
-        #     # assert lr.shape[3] == 20
-        #     # assert z.shape[0] == 1
-        #     # assert z.shape[1] == 3 * 8 * 8
-        #     # assert z.shape[2] == 20
-        #     # assert z.shape[3] == 20
-        #     if reverse_with_grad:
-        #         return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
-        #                                  add_gt_noise=add_gt_noise)
-        #     else:
-        #         with torch.no_grad():
-        #             return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
-        #                                      add_gt_noise=add_gt_noise)
-
+            
     def normal_flow(self, gt, lr, y_onehot=None, epses=None, lr_enc=None, add_gt_noise=True, step=None,
                     align_condition_feature=False):
         if self.opt['to_yuv']:

@@ -32,15 +32,6 @@ def load_model(conf_path):
     return model, opt
 
 
-def predict(model, lr):
-    pdb.set_trace()
-    
-    model.feed_data({"LQ": t(lr)}, need_GT=False)
-    model.test()
-    visuals = model.get_current_visuals(need_GT=False)
-    return visuals.get('rlt', visuals.get('NORMAL'))
-
-
 def t(array): 
     return torch.Tensor(np.expand_dims(array.transpose([2, 0, 1]), axis=0).astype(np.float32)) / 255
 

@@ -127,10 +127,7 @@ class RRDBNet(nn.Module):
         fea_upn1_en = True #  opt_get(self.opt, ['network_G', 'flow', 'fea_up-1']) or False
         if fea_upn1_en:
             results['fea_up-1'] = F.interpolate(last_lr_fea, scale_factor=1/4, mode='bilinear', align_corners=False, recompute_scale_factor=True)
-
-        if get_steps:
-            for k, v in block_results.items():
-                results[k] = v
-            return results
-        else:
-            return out
+         
+        for k, v in block_results.items():
+            results[k] = v
+        return results

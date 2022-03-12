@@ -123,8 +123,7 @@ class FlowStep(nn.Module):
         # 2. permute
         # xxxxx3333
         # self.flow_permutation -- 'invconv'
-        # z, logdet = FlowStep.FlowPermutation[self.flow_permutation](
-        #     self, z, logdet, True)
+        # z, logdet = FlowStep.FlowPermutation[self.flow_permutation](self, z, logdet, True)
         z, logdet = self.invconv(z, logdet, True)
 
         # 3. actnorm
