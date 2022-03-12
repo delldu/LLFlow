@@ -8,6 +8,7 @@ from torch.nn import functional as F
 
 from models.modules import thops
 
+import pdb
 
 class InvertibleConv1x1(nn.Module):
     def __init__(self, num_channels, LU_decomposed=False):
@@ -17,6 +18,7 @@ class InvertibleConv1x1(nn.Module):
         self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
         self.w_shape = w_shape
         self.LU = LU_decomposed
+        # num_channels -- 12
 
     def get_weight(self, input, reverse):
         w_shape = self.w_shape

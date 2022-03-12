@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import os
 import cv2
+import pdb
 
 def fiFindByWildcard(wildcard):
     return natsort.natsorted(glob.glob(wildcard, recursive=True))
@@ -26,18 +27,22 @@ def load_model(conf_path):
     model = create_model(opt)
 
     model_path = opt_get(opt, ['model_path'], None)
+    # model_path -- 'LOL_smallNet.pth'
     model.load_network(load_path=model_path, network=model.netG)
     return model, opt
 
 
 def predict(model, lr):
+    pdb.set_trace()
+    
     model.feed_data({"LQ": t(lr)}, need_GT=False)
     model.test()
     visuals = model.get_current_visuals(need_GT=False)
     return visuals.get('rlt', visuals.get('NORMAL'))
 
 
-def t(array): return torch.Tensor(np.expand_dims(array.transpose([2, 0, 1]), axis=0).astype(np.float32)) / 255
+def t(array): 
+    return torch.Tensor(np.expand_dims(array.transpose([2, 0, 1]), axis=0).astype(np.float32)) / 255
 
 
 def rgb(t): return (
@@ -55,6 +60,8 @@ def imwrite(path, img):
 
 
 def imCropCenter(img, size):
+    pdb.set_trace()
+
     h, w, c = img.shape
 
     h_start = max(h // 2 - size // 2, 0)
@@ -118,6 +125,10 @@ def main():
         lr = imread(lr_path)
         hr = imread(hr_path)
         his = hiseq_color_cv2_img(lr)
+        # (Pdb) lr.shape-- (400, 600, 3)
+        # (Pdb) hr.shape -- (400, 600, 3)
+
+        # opt.get("histeq_as_input", False) -- False
         if opt.get("histeq_as_input", False):
             lr = his
         
@@ -126,14 +137,16 @@ def main():
         lq_orig = lr.copy()
         lr = impad(lr, bottom=int(np.ceil(h / pad_factor) * pad_factor - h),
                    right=int(np.ceil(w / pad_factor) * pad_factor - w))
-
         lr_t = t(lr)
+        # opt["datasets"]["train"].get("log_low", False) -- True
         if opt["datasets"]["train"].get("log_low", False):
             lr_t = torch.log(torch.clamp(lr_t + 1e-3, min=1e-3))
+
+        # opt.get("concat_histeq", False) -- True
         if opt.get("concat_histeq", False):
             his = t(his)
             lr_t = torch.cat([lr_t, his], dim=1)
-        heat = opt['heat']
+        heat = opt['heat'] # opt['heat'] -- 0
     
         if df is not None and len(df[(df['heat'] == heat) & (df['name'] == idx_test)]) == 1:
             continue
@@ -144,7 +157,7 @@ def main():
         mean_out = sr_t.view(sr_t.shape[0],-1).mean(dim=1)
         mean_gt = cv2.cvtColor(hr.astype(np.float32), cv2.COLOR_BGR2GRAY).mean()/255
         sr = rgb(torch.clamp(sr_t, 0, 1)*mean_gt/mean_out)
-        sr = sr[:h * scale, :w * scale]
+        sr = sr[:h * scale, :w * scale] # scale -- 1
 
         path_out_sr = os.path.join(test_dir, "{:0.2f}".format(heat).replace('.', ''), os.path.basename(hr_path))
 

@@ -74,6 +74,8 @@ class ColorEncoder(nn.Module):
         # self.conv_i2 = nn.Conv2d(nf * 2, 1, kernel_size=3, padding=1)
         # self.I_out = nn.Sigmoid()
 
+        pdb.set_trace()
+
     def forward(self, x, get_steps=False):
         assert not get_steps
 

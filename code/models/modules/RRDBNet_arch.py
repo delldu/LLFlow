@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import models.modules.module_util as mutil
 from utils.util import opt_get
 
+import pdb
 
 class ResidualDenseBlock_5C(nn.Module):
     def __init__(self, nf=64, gc=32, bias=True):
@@ -22,7 +23,8 @@ class ResidualDenseBlock_5C(nn.Module):
 
         # initialization
         mutil.initialize_weights([self.conv1, self.conv2, self.conv3, self.conv4, self.conv5], 0.1)
-
+        pdb.set_trace()
+        
     def forward(self, x):
         x1 = self.lrelu(self.conv1(x))
         x2 = self.lrelu(self.conv2(torch.cat((x, x1), 1)))

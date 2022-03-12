@@ -5,14 +5,14 @@ from torch import nn as nn
 from models.modules import thops
 from models.modules.flow import Conv2d, Conv2dZeros
 from utils.util import opt_get
-
+import pdb
 
 class CondAffineSeparatedAndCond(nn.Module):
     def __init__(self, in_channels, opt):
         super().__init__()
         self.need_features = True
         self.in_channels = in_channels
-        self.in_channels_rrdb = opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320)
+        self.in_channels_rrdb = opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
         self.kernel_hidden = 1
         self.affine_eps = 0.0001
         self.n_hidden_layers = 1
@@ -22,10 +22,11 @@ class CondAffineSeparatedAndCond(nn.Module):
         self.affine_eps = opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'eps'], 0.0001)
 
         self.channels_for_nn = self.in_channels // 2
-        self.channels_for_co = self.in_channels - self.channels_for_nn
+        self.channels_for_co = self.in_channels - self.channels_for_nn # -- 6
 
         if self.channels_for_nn is None:
             self.channels_for_nn = self.in_channels // 2
+        # self.channels_for_nn -- 6
 
         self.fAffine = self.F(in_channels=self.channels_for_nn + self.in_channels_rrdb,
                               out_channels=self.channels_for_co * 2,
@@ -39,15 +40,21 @@ class CondAffineSeparatedAndCond(nn.Module):
                                 kernel_hidden=self.kernel_hidden,
                                 n_hidden_layers=self.n_hidden_layers)
         self.opt = opt
+
+        # # opt['le_curve'] -- False
         self.le_curve = opt['le_curve'] if opt['le_curve'] is not None else False
+        # self.le_curve -- False
         if self.le_curve:
             self.fCurve = self.F(in_channels=self.in_channels_rrdb,
                                  out_channels=self.in_channels,
                                  hidden_channels=self.hidden_channels,
                                  kernel_hidden=self.kernel_hidden,
                                  n_hidden_layers=self.n_hidden_layers)
+        # in_channels = 12
+
 
     def forward(self, input: torch.Tensor, logdet=None, reverse=False, ft=None):
+        # reverse -- True
         if not reverse:
             z = input
             assert z.shape[1] == self.in_channels, (z.shape[1], self.in_channels)
@@ -84,6 +91,7 @@ class CondAffineSeparatedAndCond(nn.Module):
             z = thops.cat_feature(z1, z2)
             output = z
         else:
+            # ===> Reach here
             z = input
 
             # Self Conditional
@@ -97,13 +105,6 @@ class CondAffineSeparatedAndCond(nn.Module):
 
             # Curve conditional
             if self.le_curve:
-                # alpha = self.fCurve(ft)
-                # alpha = (torch.sigmoid(alpha + 2.) + self.affine_eps)
-                # z = (1 + alpha) / alpha - (
-                #             alpha + torch.pow(2 * alpha - 4 * alpha * z + torch.pow(alpha, 2) + 1, 0.5) + 1) / (
-                #             2 * alpha)
-                # z = torch.log((z / (1 - z)).clamp(1 / 1000, 1000))
-
                 alpha = self.fCurve(ft)
                 alpha = torch.relu(alpha) + self.affine_eps
                 # alpha = (torch.sigmoid(alpha + 2.) + self.affine_eps)

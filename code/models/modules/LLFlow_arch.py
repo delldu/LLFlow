@@ -9,7 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from models.modules.RRDBNet_arch import RRDBNet
-from models.modules.ConditionEncoder import ConEncoder1, NoEncoder
+from models.modules.ConditionEncoder import ConEncoder1
+#, NoEncoder
 from models.modules.FlowUpsamplerNet import FlowUpsamplerNet
 import models.modules.thops as thops
 import models.modules.flow as flow
@@ -18,6 +19,8 @@ from utils.util import opt_get
 from models.modules.flow import unsqueeze2d, squeeze2d
 from torch.cuda.amp import autocast
 
+import pdb
+
 class LLFlow(nn.Module):
     def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=4, K=None, opt=None, step=None):
         super(LLFlow, self).__init__()
@@ -25,25 +28,31 @@ class LLFlow(nn.Module):
         self.opt = opt
         self.quant = 255 if opt_get(opt, ['datasets', 'train', 'quant']) is \
                             None else opt_get(opt, ['datasets', 'train', 'quant'])
-        if opt['cond_encoder'] == 'ConEncoder1':
-            self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc, scale, opt)
-        elif opt['cond_encoder'] ==  'NoEncoder':
-            self.RRDB = None # NoEncoder(in_nc, out_nc, nf, nb, gc, scale, opt)
-        elif opt['cond_encoder'] == 'RRDBNet':
-            # if self.opt['encode_color_map']: print('Warning: ''encode_color_map'' is not implemented in RRDBNet')
-            self.RRDB = RRDBNet(in_nc, out_nc, nf, nb, gc, scale, opt)
-        else:
-            print('WARNING: Cannot find the conditional encoder %s, select RRDBNet by default.' % opt['cond_encoder'])
-            # if self.opt['encode_color_map']: print('Warning: ''encode_color_map'' is not implemented in RRDBNet')
-            opt['cond_encoder'] = 'RRDBNet'
-            self.RRDB = RRDBNet(in_nc, out_nc, nf, nb, gc, scale, opt)
+        # pp self.quant -- 32
 
+        # opt['cond_encoder'] -- 'ConEncoder1'
+        if opt['cond_encoder'] == 'ConEncoder1':
+            # in_nc, out_nc, nf, nb, gc, scale -- (3, 3, 32, 4, 32, 1)
+            self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc, scale, opt)
+        # elif opt['cond_encoder'] ==  'NoEncoder':
+        #     self.RRDB = None # NoEncoder(in_nc, out_nc, nf, nb, gc, scale, opt)
+        # elif opt['cond_encoder'] == 'RRDBNet':
+        #     # if self.opt['encode_color_map']: print('Warning: ''encode_color_map'' is not implemented in RRDBNet')
+        #     self.RRDB = RRDBNet(in_nc, out_nc, nf, nb, gc, scale, opt)
+        # else:
+        #     print('WARNING: Cannot find the conditional encoder %s, select RRDBNet by default.' % opt['cond_encoder'])
+        #     # if self.opt['encode_color_map']: print('Warning: ''encode_color_map'' is not implemented in RRDBNet')
+        #     opt['cond_encoder'] = 'RRDBNet'
+        #     self.RRDB = RRDBNet(in_nc, out_nc, nf, nb, gc, scale, opt)
+
+        self.opt['encode_color_map'] -- False
         if self.opt['encode_color_map']:
             self.color_map_encoder = ColorEncoder(nf=nf, opt=opt)
 
+        # opt_get(opt, ['network_G', 'flow', 'hidden_channels']) -- None
         hidden_channels = opt_get(opt, ['network_G', 'flow', 'hidden_channels'])
         hidden_channels = hidden_channels or 64
-        self.RRDB_training = True  # Default is true
+        # self.RRDB_training = True  # Default is true
 
         train_RRDB_delay = opt_get(self.opt, ['network_G', 'train_RRDB_delay'])
         set_RRDB_to_train = False
@@ -54,6 +63,7 @@ class LLFlow(nn.Module):
             FlowUpsamplerNet((self.crop_size, self.crop_size, 3), hidden_channels, K,
                              flow_coupling=opt['network_G']['flow']['coupling'], opt=opt)
         self.i = 0
+        # self.opt['to_yuv'] -- False
         if self.opt['to_yuv']:
             self.A_rgb2yuv = torch.nn.Parameter(torch.tensor([[0.299, -0.14714119, 0.61497538],
                                                               [0.587, -0.28886916, -0.51496512],
@@ -61,6 +71,7 @@ class LLFlow(nn.Module):
             self.A_yuv2rgb = torch.nn.Parameter(torch.tensor([[1., 1., 1.],
                                                               [0., -0.39465, 2.03211],
                                                               [1.13983, -0.58060, 0]]), requires_grad=False)
+        # self.opt['align_maxpool'] -- True
         if self.opt['align_maxpool']:
             self.max_pool = torch.nn.MaxPool2d(3)
 
@@ -86,32 +97,39 @@ class LLFlow(nn.Module):
     def forward(self, gt=None, lr=None, z=None, eps_std=None, reverse=False, epses=None, reverse_with_grad=False,
                 lr_enc=None,
                 add_gt_noise=False, step=None, y_label=None, align_condition_feature=False, get_color_map=False):
-        if get_color_map:
-            color_lr = self.color_map_encoder(lr)
-            color_gt = nn.functional.avg_pool2d(gt, 11, 1, 5)
-            color_gt = color_gt / torch.sum(color_gt, 1, keepdim=True)
-            return color_lr, color_gt
-        if not reverse:
-            if epses is not None and gt.device.index is not None:
-                epses = epses[gt.device.index]
-            return self.normal_flow(gt, lr, epses=epses, lr_enc=lr_enc, add_gt_noise=add_gt_noise, step=step,
-                                    y_onehot=y_label, align_condition_feature=align_condition_feature)
-        else:
-            # assert lr.shape[0] == 1
-            assert lr.shape[1] == 3 or lr.shape[1] == 6
-            # assert lr.shape[2] == 20
-            # assert lr.shape[3] == 20
-            # assert z.shape[0] == 1
-            # assert z.shape[1] == 3 * 8 * 8
-            # assert z.shape[2] == 20
-            # assert z.shape[3] == 20
-            if reverse_with_grad:
-                return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
-                                         add_gt_noise=add_gt_noise)
-            else:
-                with torch.no_grad():
-                    return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
-                                             add_gt_noise=add_gt_noise)
+
+        # print("get_color_map:", get_color_map, "reverse:", reverse, "reverse_with_grad:", reverse_with_grad)
+        # get_color_map: False reverse: True reverse_with_grad: False
+
+        with torch.no_grad():
+            return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
+                                     add_gt_noise=add_gt_noise)
+        # if get_color_map:
+        #     color_lr = self.color_map_encoder(lr)
+        #     color_gt = nn.functional.avg_pool2d(gt, 11, 1, 5)
+        #     color_gt = color_gt / torch.sum(color_gt, 1, keepdim=True)
+        #     return color_lr, color_gt
+        # if not reverse:
+        #     if epses is not None and gt.device.index is not None:
+        #         epses = epses[gt.device.index]
+        #     return self.normal_flow(gt, lr, epses=epses, lr_enc=lr_enc, add_gt_noise=add_gt_noise, step=step,
+        #                             y_onehot=y_label, align_condition_feature=align_condition_feature)
+        # else:
+        #     # assert lr.shape[0] == 1
+        #     assert lr.shape[1] == 3 or lr.shape[1] == 6
+        #     # assert lr.shape[2] == 20
+        #     # assert lr.shape[3] == 20
+        #     # assert z.shape[0] == 1
+        #     # assert z.shape[1] == 3 * 8 * 8
+        #     # assert z.shape[2] == 20
+        #     # assert z.shape[3] == 20
+        #     if reverse_with_grad:
+        #         return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
+        #                                  add_gt_noise=add_gt_noise)
+        #     else:
+        #         with torch.no_grad():
+        #             return self.reverse_flow(lr, z, y_onehot=y_label, eps_std=eps_std, epses=epses, lr_enc=lr_enc,
+        #                                      add_gt_noise=add_gt_noise)
 
     def normal_flow(self, gt, lr, y_onehot=None, epses=None, lr_enc=None, add_gt_noise=True, step=None,
                     align_condition_feature=False):

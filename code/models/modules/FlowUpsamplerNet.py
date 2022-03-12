@@ -12,6 +12,7 @@ from models.modules.glow_arch import f_conv2d_bias
 from models.modules.FlowStep import FlowStep
 from utils.util import opt_get
 
+import pdb
 
 class FlowUpsamplerNet(nn.Module):
     def __init__(self, image_shape, hidden_channels, K, L=None,
@@ -21,19 +22,34 @@ class FlowUpsamplerNet(nn.Module):
                  LU_decomposed=False, opt=None):
 
         super().__init__()
+
+        # image_shape = (160, 160, 3)
+        # hidden_channels = 64
+        # K = 4
+        # L = None
+        # actnorm_scale = 1.0
+        # flow_permutation = None
+        # flow_coupling = 'CondAffineSeparatedAndCond'
+        # LU_decomposed = False
+
         self.hr_size = opt['datasets']['train']['GT_size']
         self.layers = nn.ModuleList()
         self.output_shapes = []
+
         self.sigmoid_output = opt['sigmoid_output'] if opt['sigmoid_output'] is not None else False
-        self.L = opt_get(opt, ['network_G', 'flow', 'L'])
-        self.K = opt_get(opt, ['network_G', 'flow', 'K'])
+        # self.sigmoid_output -- False
+
+        self.L = opt_get(opt, ['network_G', 'flow', 'L']) # 3
+        self.K = opt_get(opt, ['network_G', 'flow', 'K']) # 4
         if isinstance(self.K, int):
             self.K = [K for K in [K, ] * (self.L + 1)]
+        # self.K -- [4, 4, 4, 4]
 
         self.opt = opt
         H, W, self.C = image_shape
         self.check_image_shape()
 
+        # opt['scale'] -- 1
         if opt['scale'] == 16:
             self.levelToName = {
                 0: 'fea_up16',
@@ -69,14 +85,15 @@ class FlowUpsamplerNet(nn.Module):
                 # 4: 'fea_up-1'
             }
 
-        affineInCh = self.get_affineInCh(opt_get)
-        flow_permutation = self.get_flow_permutation(flow_permutation, opt)
-
-        normOpt = opt_get(opt, ['network_G', 'flow', 'norm'])
+        affineInCh = self.get_affineInCh(opt_get) # 128
+        flow_permutation = self.get_flow_permutation(flow_permutation, opt) # 'invconv'
+        normOpt = opt_get(opt, ['network_G', 'flow', 'norm']) # -- None
 
         conditional_channels = {}
-        n_rrdb = self.get_n_rrdb_channels(opt, opt_get)
+        n_rrdb = self.get_n_rrdb_channels(opt, opt_get) # -- 128
         n_bypass_channels = opt_get(opt, ['network_G', 'flow', 'levelConditional', 'n_channels'])
+        # n_bypass_channels -- None
+
         conditional_channels[0] = n_rrdb
         for level in range(1, self.L + 1):
             # Level 1 gets conditionals from 2, 3, 4 => L - level
@@ -100,6 +117,7 @@ class FlowUpsamplerNet(nn.Module):
             # Split
             self.arch_split(H, W, level, self.L, opt, opt_get)
 
+        # opt_get(opt, ['network_G', 'flow', 'split', 'enable']) -- False
         if opt_get(opt, ['network_G', 'flow', 'split', 'enable']):
             self.f = f_conv2d_bias(affineInCh, 2 * 3 * 64 // 2 // 2)
         else:
@@ -107,11 +125,11 @@ class FlowUpsamplerNet(nn.Module):
 
         self.H = H
         self.W = W
-        self.scaleH = opt['datasets']['train']['GT_size'] / H
-        self.scaleW = opt['datasets']['train']['GT_size'] / W
+        self.scaleH = opt['datasets']['train']['GT_size'] / H # -- 1.0
+        self.scaleW = opt['datasets']['train']['GT_size'] / W # -- 1.0
 
     def get_n_rrdb_channels(self, opt, opt_get):
-        blocks = opt_get(opt, ['network_G', 'flow', 'stackRRDB', 'blocks'])
+        blocks = opt_get(opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) # [1]
         n_rrdb = 64 if blocks is None else (len(blocks) + 1) * 64
         return n_rrdb
 
@@ -140,11 +158,14 @@ class FlowUpsamplerNet(nn.Module):
     def get_condAffSetting(self, opt, opt_get):
         condAff = opt_get(opt, ['network_G', 'flow', 'condAff']) or None
         condAff = opt_get(opt, ['network_G', 'flow', 'condFtAffine']) or condAff
+        # pp condAff -- None
         return condAff
 
     def arch_split(self, H, W, L, levels, opt, opt_get):
         correct_splits = opt_get(opt, ['network_G', 'flow', 'split', 'correct_splits'], False)
         correction = 0 if correct_splits else 1
+
+        # opt_get(opt, ['network_G', 'flow', 'split', 'enable']) -- False
         if opt_get(opt, ['network_G', 'flow', 'split', 'enable']) and L < levels - correction:
             logs_eps = opt_get(opt, ['network_G', 'flow', 'split', 'logs_eps']) or 0
             consume_ratio = opt_get(opt, ['network_G', 'flow', 'split', 'consume_ratio']) or 0.5
@@ -163,9 +184,13 @@ class FlowUpsamplerNet(nn.Module):
             self.C = split.num_channels_pass
 
     def arch_additionalFlowAffine(self, H, LU_decomposed, W, actnorm_scale, hidden_channels, opt):
+        # 'additionalFlowNoAffine' in opt['network_G']['flow'] -- True
         if 'additionalFlowNoAffine' in opt['network_G']['flow']:
             n_additionalFlowNoAffine = int(opt['network_G']['flow']['additionalFlowNoAffine'])
+            # n_additionalFlowNoAffine -- 2, self.C -- 12
+            
             for _ in range(n_additionalFlowNoAffine):
+                # LU_decomposed -- False
                 self.layers.append(
                     FlowStep(in_channels=self.C,
                              hidden_channels=hidden_channels,
@@ -184,12 +209,13 @@ class FlowUpsamplerNet(nn.Module):
 
     def get_flow_permutation(self, flow_permutation, opt):
         flow_permutation = opt['network_G']['flow'].get('flow_permutation', 'invconv')
-        return flow_permutation
+        return flow_permutation # 'invconv'
 
     def get_affineInCh(self, opt_get):
         affineInCh = opt_get(self.opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) or []
+        # affineInCh ==> [1]
         affineInCh = (len(affineInCh) + 1) * 64
-        return affineInCh
+        return affineInCh # 128
 
     def check_image_shape(self):
         assert self.C == 1 or self.C == 3, ("image_shape should be HWC, like (64, 64, 3)"
@@ -197,6 +223,11 @@ class FlowUpsamplerNet(nn.Module):
 
     def forward(self, gt=None, rrdbResults=None, z=None, epses=None, logdet=0., reverse=False, eps_std=None,
                 y_onehot=None):
+        # epses = None
+        # logdet = tensor([0.])
+        # reverse = True
+        # eps_std = 0
+        # y_onehot = None
 
         if reverse:
             epses_copy = [eps for eps in epses] if isinstance(epses, list) else epses
@@ -221,6 +252,7 @@ class FlowUpsamplerNet(nn.Module):
         bypasses = {}
 
         L = opt_get(self.opt, ['network_G', 'flow', 'L'])
+        pdb.set_trace()
 
         for level in range(1, L + 1):
             bypasses[level] = torch.nn.functional.interpolate(gt, scale_factor=2 ** -level, mode='bilinear',
@@ -252,12 +284,16 @@ class FlowUpsamplerNet(nn.Module):
         return epses, logdet
 
     def forward_preFlow(self, fl_fea, logdet, reverse):
+        pdb.set_trace()
+
         if hasattr(self, 'preFlow'):
             for l in self.preFlow:
                 fl_fea, logdet = l(fl_fea, logdet, reverse=reverse)
         return fl_fea, logdet
 
     def forward_split2d(self, epses, fl_fea, layer, logdet, reverse, rrdbResults, y_onehot=None):
+        pdb.set_trace()
+
         ft = None if layer.position is None else rrdbResults[layer.position]
         fl_fea, logdet, eps = layer(fl_fea, logdet, reverse=reverse, eps=epses, ft=ft, y_onehot=y_onehot)
 
@@ -266,12 +302,15 @@ class FlowUpsamplerNet(nn.Module):
         return fl_fea, logdet
 
     def decode(self, rrdbResults, z, eps_std=None, epses=None, logdet=0.0, y_onehot=None):
-        z = epses.pop() if isinstance(epses, list) else z
+        # pp epses -- None
+        # xxxx3333
+        # z = epses.pop() if isinstance(epses, list) else z
 
         fl_fea = z
         # debug.imwrite("fl_fea", fl_fea)
         bypasses = {}
         level_conditionals = {}
+        # not opt_get(self.opt, ['network_G', 'flow', 'levelConditional', 'conditional']) == True -- True
         if not opt_get(self.opt, ['network_G', 'flow', 'levelConditional', 'conditional']) == True:
             for level in range(self.L + 1):
                 if level not in self.levelToName.keys():
@@ -300,6 +339,8 @@ class FlowUpsamplerNet(nn.Module):
         return sr, logdet
 
     def forward_split2d_reverse(self, eps_std, epses, fl_fea, layer, rrdbResults, logdet, y_onehot=None):
+        pdb.set_trace()
+
         ft = None if layer.position is None else rrdbResults[layer.position]
         fl_fea, logdet = layer(fl_fea, logdet=logdet, reverse=True,
                                eps=epses.pop() if isinstance(epses, list) else None,
@@ -308,6 +349,7 @@ class FlowUpsamplerNet(nn.Module):
 
 
 def get_position_name(H, scale, opt):
-    downscale_factor = opt['datasets']['train']['GT_size'] // H
+    downscale_factor = opt['datasets']['train']['GT_size'] // H  # 2
     position_name = 'fea_up{}'.format(scale / downscale_factor)
+    # position_name -- 'fea_up0.5'
     return position_name

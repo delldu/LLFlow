@@ -8,7 +8,7 @@ import numpy as np
 
 from models.modules.FlowActNorms import ActNorm2d
 from . import thops
-
+import pdb
 
 class Conv2d(nn.Conv2d):
     pad_dict = {
@@ -44,6 +44,7 @@ class Conv2d(nn.Conv2d):
         else:
             self.actnorm = ActNorm2d(out_channels)
         self.do_actnorm = do_actnorm
+        # do_actnorm = True
 
     def forward(self, input):
         x = super().forward(input)
