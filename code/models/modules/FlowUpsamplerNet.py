@@ -149,11 +149,9 @@ class FlowUpsamplerNet(nn.Module):
                          actnorm_scale=actnorm_scale,
                          flow_permutation=flow_permutation,
                          flow_coupling=flow_coupling,
-                         acOpt=condAff,
                          position=position_name,
-                         LU_decomposed=LU_decomposed, opt=opt, idx=k, normOpt=normOpt))
-            self.output_shapes.append(
-                [-1, self.C, H, W])
+                         LU_decomposed=LU_decomposed, opt=opt, normOpt=normOpt))
+            self.output_shapes.append([-1, self.C, H, W])
 
     def get_condAffSetting(self, opt, opt_get):
         condAff = opt_get(opt, ['network_G', 'flow', 'condAff']) or None

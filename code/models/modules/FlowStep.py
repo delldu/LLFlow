@@ -36,23 +36,19 @@ class FlowStep(nn.Module):
 
     def __init__(self, in_channels, hidden_channels,
                  actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive",
-                 LU_decomposed=False, opt=None, image_injector=None, idx=None, acOpt=None, normOpt=None, in_shape=None,
+                 LU_decomposed=False, opt=None, normOpt=None,
                  position=None):
         # check configures
         assert flow_permutation in FlowStep.FlowPermutation, \
-            "float_permutation should be in `{}`".format(
-                FlowStep.FlowPermutation.keys())
+            "float_permutation should be in `{}`".format(FlowStep.FlowPermutation.keys())
         super().__init__()
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
-        self.image_injector = image_injector
 
         self.norm_type = normOpt['type'] if normOpt else 'ActNorm2d'
         self.position = normOpt['position'] if normOpt else None
 
-        self.in_shape = in_shape
         self.position = position
-        self.acOpt = acOpt
 
         # 1. actnorm
         self.actnorm = models.modules.FlowActNorms.ActNorm2d(in_channels, actnorm_scale)
@@ -62,8 +58,7 @@ class FlowStep(nn.Module):
         # if flow_permutation == "invconv":
         #     self.invconv = models.modules.Permutations.InvertibleConv1x1(
         #         in_channels, LU_decomposed=LU_decomposed)
-        self.invconv = models.modules.Permutations.InvertibleConv1x1(
-            in_channels, LU_decomposed=LU_decomposed)
+        self.invconv = models.modules.Permutations.InvertibleConv1x1(in_channels, LU_decomposed=LU_decomposed)
 
         # 3. coupling
         if flow_coupling == "CondAffineSeparatedAndCond":
@@ -101,7 +96,6 @@ class FlowStep(nn.Module):
         need_features = self.affine_need_features() # False
 
         # 3. coupling
-        # self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"] -- False
         if need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
             img_ft = getConditional(rrdbResults, self.position)
             z, logdet = self.affine(input=z, logdet=logdet, reverse=False, ft=img_ft)
@@ -112,18 +106,11 @@ class FlowStep(nn.Module):
         need_features = self.affine_need_features() # True
 
         # 1.coupling
-        # self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"] -- False
-        # xxxx3333
+        # self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]
         if need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
-            # img_ft = getConditional(rrdbResults, self.position)
-            img_ft = rrdbResults
-
-            z, logdet = self.affine(input=z, logdet=logdet, reverse=True, ft=img_ft)
+            z, logdet = self.affine(input=z, logdet=logdet, reverse=True, ft=rrdbResults)
 
         # 2. permute
-        # xxxxx3333
-        # self.flow_permutation -- 'invconv'
-        # z, logdet = FlowStep.FlowPermutation[self.flow_permutation](self, z, logdet, True)
         z, logdet = self.invconv(z, logdet, True)
 
         # 3. actnorm
