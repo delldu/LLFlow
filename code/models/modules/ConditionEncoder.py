@@ -1,13 +1,11 @@
 
 
-# from torchvision.utils import save_image
 import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import models.modules.module_util as mutil
-# from utils.util import opt_get
-# from models.modules.flow import Conv2dZeros
+
 
 import pdb
 
@@ -88,7 +86,6 @@ class ConEncoder1(nn.Module):
         # gc = 32
         # scale = 1
 
-    # def forward(self, x, get_steps=False):
     def forward(self, x):
         raw_low_input = x[:, 0:3].exp()
         awb_weight = 1  # (1 + self.awb_para(fea_for_awb).unsqueeze(2).unsqueeze(3))

@@ -28,22 +28,22 @@ class LLFlowModel(BaseModel):
         self.netG.to(device)
 
 
-    def get_sr(self, lq, heat=None, seed=None, z=None):
-        return self.get_sr_with_z(lq, heat, seed, z)[0]
+    def get_sr(self, lq, heat=None):
+        return self.get_sr_with_z(lq, heat)[0]
 
 
-    def get_sr_with_z(self, lq, heat=None, seed=None, z=None):
+    def get_sr_with_z(self, lq, heat=None):
         self.netG.eval()
         if heat is None:
             heat = 0
-        z = self.get_z(heat, seed, batch_size=lq.shape[0], lr_shape=lq.shape) # if z is None and epses is None else z
+        z = self.get_z(heat, batch_size=lq.shape[0], lr_shape=lq.shape) # if z is None and epses is None else z
         # heat -- 0, seed -- None, lq.size() -- [1, 6, 400, 600], z.size() -- [1, 192, 50, 75]
         with torch.no_grad():
             sr, logdet = self.netG(lr=lq, z=z, eps_std=heat, reverse=True)
         self.netG.train()
         return sr, z
 
-    def get_z(self, heat, seed=None, batch_size=1, lr_shape=None):
+    def get_z(self, heat, batch_size=1, lr_shape=None):
         H = int(lr_shape[2] // self.netG.flowUpsamplerNet.scaleH)
         W = int(lr_shape[3] // self.netG.flowUpsamplerNet.scaleW)
         

@@ -137,13 +137,15 @@ def main():
             continue
 
         # lr_t.size() -- [1, 6, 400, 600] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        sr_t = model.get_sr(lq=lr_t, heat=None)
+        sr_t = model.get_sr(lq=lr_t, heat=2.0)
 
         # We follow a similar way of 'Kind' to finetune the overall brightness as illustrated in Line 73 (https://github.com/zhangyhuaee/KinD/blob/master/evaluate_LOLdataset.py).
         # A normally-exposed image can also be obtained without finetuning the global brightness and we can achvieve compatible performance in terms of SSIM and LPIPS.
         mean_out = sr_t.view(sr_t.shape[0],-1).mean(dim=1)
         mean_gt = cv2.cvtColor(hr.astype(np.float32), cv2.COLOR_BGR2GRAY).mean()/255
         sr = rgb(torch.clamp(sr_t, 0, 1)*mean_gt/mean_out)
+        # sr = rgb(torch.clamp(sr_t, 0, 1))
+
         sr = sr[:h * scale, :w * scale] # scale -- 1
 
         path_out_sr = os.path.join(test_dir, "{:0.2f}".format(heat).replace('.', ''), os.path.basename(hr_path))
