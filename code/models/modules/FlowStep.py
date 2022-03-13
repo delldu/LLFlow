@@ -11,33 +11,16 @@ from utils.util import opt_get
 
 import pdb
 
-def getConditional(rrdbResults, position):
-    # position = 'fea_up0.125'
-    # type(rrdbResults) -- <class 'torch.Tensor'>
-    img_ft = rrdbResults if isinstance(rrdbResults, torch.Tensor) else rrdbResults[position]
-    # img_ft.size() -- [1, 64, 50, 75]
-
-    return img_ft
-
-
 class FlowStep(nn.Module):
     FlowPermutation = {
         "reverse": lambda obj, z, logdet, rev: (obj.reverse(z, rev), logdet),
         "shuffle": lambda obj, z, logdet, rev: (obj.shuffle(z, rev), logdet),
         "invconv": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "squeeze_invconv": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "resqueeze_invconv_alternating_2_3": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "resqueeze_invconv_3": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "InvertibleConv1x1GridAlign": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "InvertibleConv1x1SubblocksShuf": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "InvertibleConv1x1GridAlignIndepBorder": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-        # "InvertibleConv1x1GridAlignIndepBorder4": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
     }
 
     def __init__(self, in_channels, hidden_channels,
                  actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive",
-                 LU_decomposed=False, opt=None, normOpt=None,
-                 position=None):
+                 opt=None):
         # check configures
         assert flow_permutation in FlowStep.FlowPermutation, \
             "float_permutation should be in `{}`".format(FlowStep.FlowPermutation.keys())
@@ -45,20 +28,13 @@ class FlowStep(nn.Module):
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
 
-        self.norm_type = normOpt['type'] if normOpt else 'ActNorm2d'
-        self.position = normOpt['position'] if normOpt else None
-
-        self.position = position
+        self.norm_type = 'ActNorm2d'
 
         # 1. actnorm
         self.actnorm = models.modules.FlowActNorms.ActNorm2d(in_channels, actnorm_scale)
 
         # 2. permute
-        # flow_permutation == "invconv" -- True
-        # if flow_permutation == "invconv":
-        #     self.invconv = models.modules.Permutations.InvertibleConv1x1(
-        #         in_channels, LU_decomposed=LU_decomposed)
-        self.invconv = models.modules.Permutations.InvertibleConv1x1(in_channels, LU_decomposed=LU_decomposed)
+        self.invconv = models.modules.Permutations.InvertibleConv1x1(in_channels)
 
         # 3. coupling
         if flow_coupling == "CondAffineSeparatedAndCond":
@@ -83,8 +59,7 @@ class FlowStep(nn.Module):
         # 1. actnorm
         # self.norm_type -- 'ActNorm2d'
         if self.norm_type == "ConditionalActNormImageInjector":
-            img_ft = getConditional(rrdbResults, self.position)
-            z, logdet = self.actnorm(z, img_ft=img_ft, logdet=logdet, reverse=False)
+            z, logdet = self.actnorm(z, img_ft=rrdbResults, logdet=logdet, reverse=False)
         elif self.norm_type == "noNorm":
             pass
         else:
@@ -97,7 +72,7 @@ class FlowStep(nn.Module):
 
         # 3. coupling
         if need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
-            img_ft = getConditional(rrdbResults, self.position)
+            img_ft = getConditional(rrdbResults)
             z, logdet = self.affine(input=z, logdet=logdet, reverse=False, ft=img_ft)
         return z, logdet
 
@@ -106,7 +81,8 @@ class FlowStep(nn.Module):
         need_features = self.affine_need_features() # True
 
         # 1.coupling
-        # self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]
+        # need_features:  True self.flow_coupling:  CondAffineSeparatedAndCond
+        # need_features:  False self.flow_coupling:  noCoupling
         if need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
             z, logdet = self.affine(input=z, logdet=logdet, reverse=True, ft=rrdbResults)
 

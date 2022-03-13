@@ -11,13 +11,12 @@ from models.modules import thops
 import pdb
 
 class InvertibleConv1x1(nn.Module):
-    def __init__(self, num_channels, LU_decomposed=False):
+    def __init__(self, num_channels):
         super().__init__()
         w_shape = [num_channels, num_channels]
         w_init = np.linalg.qr(np.random.randn(*w_shape))[0].astype(np.float32)
         self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
         self.w_shape = w_shape
-        self.LU = LU_decomposed
         # num_channels -- 12
 
     def get_weight(self, input, reverse):

@@ -246,13 +246,6 @@ def main():
                                                                                                     int(heat * 100), i))
                                 util.save_img(normal_img, save_img_path)
                     else:
-                        if opt['align_color_from_lr']:
-                            visuals['NORMAL'] = color_adjust(visuals['LQ'], visuals['NORMAL'], 11)
-                        if opt['encode_color_map']:
-                            color_lr, color_gt = model.get_color_map()
-                            save_image(torch.cat([color_lr, color_gt], dim=0), os.path.join(img_dir,
-                                                                                            'colormap_{:s}.png'.format(
-                                                                                                img_name)), normalize=True)
                         normal_img = util.tensor2img(visuals['NORMAL'])  # uint8
                         save_img_path = os.path.join(img_dir,
                                                      '{:s}_{:d}.png'.format(img_name, current_step))

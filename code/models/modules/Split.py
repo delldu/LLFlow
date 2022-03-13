@@ -11,7 +11,7 @@ from utils.util import opt_get
 
 
 class Split2d(nn.Module):
-    def __init__(self, num_channels, logs_eps=0, cond_channels=0, position=None, consume_ratio=0.5, opt=None):
+    def __init__(self, num_channels, logs_eps=0, cond_channels=0, consume_ratio=0.5, opt=None):
         super().__init__()
 
         self.num_channels_consume = int(round(num_channels * consume_ratio))
@@ -20,8 +20,8 @@ class Split2d(nn.Module):
         self.conv = Conv2dZeros(in_channels=self.num_channels_pass + cond_channels,
                                 out_channels=self.num_channels_consume * 2)
         self.logs_eps = logs_eps
-        self.position = position
         self.opt = opt
+        pdb.set_trace()
 
     def split2d_prior(self, z, ft):
         if ft is not None:
@@ -32,7 +32,7 @@ class Split2d(nn.Module):
     def exp_eps(self, logs):
         return torch.exp(logs) + self.logs_eps
 
-    def forward(self, input, logdet=0., eps_std=None, eps=None, ft=None, y_onehot=None):
+    def forward(self, input, logdet=0., eps_std=None, eps=None, ft=None):
         z1 = input
         mean, logs = self.split2d_prior(z1, ft)
 

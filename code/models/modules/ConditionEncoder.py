@@ -1,13 +1,13 @@
 
 
-from torchvision.utils import save_image
+# from torchvision.utils import save_image
 import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import models.modules.module_util as mutil
-from utils.util import opt_get
-from models.modules.flow import Conv2dZeros
+# from utils.util import opt_get
+# from models.modules.flow import Conv2dZeros
 
 import pdb
 
@@ -58,11 +58,11 @@ class RRDB(nn.Module):
 
 class ConEncoder1(nn.Module):
     def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=4, opt=None):
-        self.opt = opt
-        if opt['concat_histeq']:
-            in_nc = in_nc + 3
-        in_nc = in_nc + 6
         super(ConEncoder1, self).__init__()
+        self.opt = opt
+
+        in_nc = in_nc + 3 # concat_histeq
+        in_nc = in_nc + 6
         RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
         self.scale = scale
 
@@ -89,8 +89,8 @@ class ConEncoder1(nn.Module):
         # gc = 32
         # scale = 1
 
-    def forward(self, x, get_steps=False):
-
+    # def forward(self, x, get_steps=False):
+    def forward(self, x):
         raw_low_input = x[:, 0:3].exp()
         awb_weight = 1  # (1 + self.awb_para(fea_for_awb).unsqueeze(2).unsqueeze(3))
         low_after_awb = raw_low_input * awb_weight
@@ -103,8 +103,8 @@ class ConEncoder1(nn.Module):
         fea = self.conv_second(fea)
         fea_head = F.max_pool2d(fea, 2)
 
-        block_idxs = opt_get(self.opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) or []
-        # ==> block_idxs -- [1]
+        block_idxs = [1] # opt_get(self.opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) or []
+
 
         block_results = {}
         fea = fea_head
@@ -145,5 +145,3 @@ class ConEncoder1(nn.Module):
             return grad
 
         return sub_gradient(x), sub_gradient(torch.transpose(x, 2, 3)).transpose(2, 3)
-
-

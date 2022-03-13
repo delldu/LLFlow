@@ -42,6 +42,7 @@ class RRDB(nn.Module):
         self.RDB1 = ResidualDenseBlock_5C(nf, gc)
         self.RDB2 = ResidualDenseBlock_5C(nf, gc)
         self.RDB3 = ResidualDenseBlock_5C(nf, gc)
+        pdb.set_trace()
 
     def forward(self, x):
         out = self.RDB1(x)
@@ -74,11 +75,15 @@ class RRDBNet(nn.Module):
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        pdb.set_trace()
 
-    def forward(self, x, get_steps=False):
+    # def forward(self, x, get_steps=False):
+    def forward(self, x):
         fea = self.conv_first(x)
 
         block_idxs = opt_get(self.opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) or []
+        print("block_idxs---", block_idxs)
+
         block_results = {}
 
         for idx, m in enumerate(self.RRDB_trunk.children()):

@@ -116,31 +116,27 @@ def main():
         lr = imread(lr_path)
         hr = imread(hr_path)
         his = hiseq_color_cv2_img(lr)
+        his = t(his)
+
         # (Pdb) lr.shape-- (400, 600, 3)
         # (Pdb) hr.shape -- (400, 600, 3)
 
-        # opt.get("histeq_as_input", False) -- False
-        if opt.get("histeq_as_input", False):
-            lr = his
-        
         # Pad image to be % 2
         h, w, c = lr.shape
         lq_orig = lr.copy()
         lr = impad(lr, bottom=int(np.ceil(h / pad_factor) * pad_factor - h),
                    right=int(np.ceil(w / pad_factor) * pad_factor - w))
         lr_t = t(lr)
-        # opt["datasets"]["train"].get("log_low", False) -- True
-        if opt["datasets"]["train"].get("log_low", False):
-            lr_t = torch.log(torch.clamp(lr_t + 1e-3, min=1e-3))
 
-        # opt.get("concat_histeq", False) -- True
-        if opt.get("concat_histeq", False):
-            his = t(his)
-            lr_t = torch.cat([lr_t, his], dim=1)
+        lr_t = torch.log(torch.clamp(lr_t + 1e-3, min=1e-3)) # torch.log(torch.Tensor([0.001])) -- [-6.9078]
+        lr_t = torch.cat([lr_t, his], dim=1)
+
         heat = opt['heat'] # opt['heat'] -- 0
     
         if df is not None and len(df[(df['heat'] == heat) & (df['name'] == idx_test)]) == 1:
             continue
+
+        # lr_t.size() -- [1, 6, 400, 600] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         sr_t = model.get_sr(lq=lr_t, heat=None)
 
         # We follow a similar way of 'Kind' to finetune the overall brightness as illustrated in Line 73 (https://github.com/zhangyhuaee/KinD/blob/master/evaluate_LOLdataset.py).
