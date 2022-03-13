@@ -221,7 +221,7 @@ class FlowUpsamplerNet(nn.Module):
             level = int(np.log(self.hr_size / size) / np.log(2))
             # FlowStep.FlowStep, flow.SqueezeLayer
             if isinstance(layer, FlowStep):
-                fl_fea, logdet = layer(fl_fea, logdet=logdet, reverse=True, rrdbResults=level_conditionals[level])
+                fl_fea, logdet = layer(fl_fea, logdet=logdet, rrdbResults=level_conditionals[level])
             else:
                 fl_fea, logdet = layer(fl_fea, logdet=logdet, reverse=True)
 

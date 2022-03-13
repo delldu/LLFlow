@@ -13,8 +13,8 @@ class CondAffineSeparatedAndCond(nn.Module):
         self.need_features = True
         self.in_channels = in_channels
         self.in_channels_rrdb = 64 # opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
-        self.kernel_hidden = 1
-        self.n_hidden_layers = 1
+        # self.kernel_hidden = 1
+        # self.n_hidden_layers = 1
         # hidden_channels = opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'hidden_channels'])
         self.hidden_channels = 64 # if hidden_channels is None else hidden_channels
 
@@ -29,14 +29,14 @@ class CondAffineSeparatedAndCond(nn.Module):
         self.fAffine = self.F(in_channels=self.channels_for_nn + self.in_channels_rrdb,
                               out_channels=self.channels_for_co * 2,
                               hidden_channels=self.hidden_channels,
-                              kernel_hidden=self.kernel_hidden,
-                              n_hidden_layers=self.n_hidden_layers)
+                              kernel_hidden=1,
+                              n_hidden_layers=1)
 
         self.fFeatures = self.F(in_channels=self.in_channels_rrdb,
                                 out_channels=self.in_channels * 2,
                                 hidden_channels=self.hidden_channels,
-                                kernel_hidden=self.kernel_hidden,
-                                n_hidden_layers=self.n_hidden_layers)
+                                kernel_hidden=1,
+                                n_hidden_layers=1)
         # in_channels = 12
 
 
@@ -112,7 +112,7 @@ class CondAffineSeparatedAndCond(nn.Module):
         assert z1.shape[1] + z2.shape[1] == z.shape[1], (z1.shape[1], z2.shape[1], z.shape[1])
         return z1, z2
 
-    def F(self, in_channels, out_channels, hidden_channels, kernel_hidden=1, n_hidden_layers=1):
+    def F(self, in_channels, out_channels, hidden_channels=64, kernel_hidden=1, n_hidden_layers=1):
         layers = [Conv2d(in_channels, hidden_channels), nn.ReLU(inplace=False)]
 
         for _ in range(n_hidden_layers):

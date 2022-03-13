@@ -1,22 +1,21 @@
 
 
 
-import math
-import random
+# import math
+# import random
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from models.modules.RRDBNet_arch import RRDBNet
+# import numpy as np
+# from models.modules.RRDBNet_arch import RRDBNet
 from models.modules.ConditionEncoder import ConEncoder1
 from models.modules.FlowUpsamplerNet import FlowUpsamplerNet
 import models.modules.thops as thops
-import models.modules.flow as flow
-from models.modules.color_encoder import ColorEncoder
-from utils.util import opt_get
-from models.modules.flow import unsqueeze2d, squeeze2d
-from torch.cuda.amp import autocast
+# import models.modules.flow as flow
+# from models.modules.color_encoder import ColorEncoder
+# from utils.util import opt_get
+from models.modules.flow import squeeze2d
 
 import pdb
 
@@ -38,8 +37,8 @@ class LLFlow(nn.Module):
 
     # @autocast()
     def forward(self, gt=None, lr=None, z=None, eps_std=None, reverse=False, lr_enc=None):
-        with torch.no_grad():
-            return self.reverse_flow(lr, z, eps_std=eps_std, lr_enc=lr_enc)
+        # with torch.no_grad():
+        return self.reverse_flow(lr, z, eps_std=eps_std, lr_enc=lr_enc)
             
     def rrdbPreprocessing(self, lr):
         rrdbResults = self.RRDB(lr)
