@@ -19,8 +19,7 @@ class FlowStep(nn.Module):
     }
 
     def __init__(self, in_channels, hidden_channels,
-                 actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive",
-                 opt=None):
+                 actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive"):
         # check configures
         assert flow_permutation in FlowStep.FlowPermutation, \
             "float_permutation should be in `{}`".format(FlowStep.FlowPermutation.keys())
@@ -38,8 +37,7 @@ class FlowStep(nn.Module):
 
         # 3. coupling
         if flow_coupling == "CondAffineSeparatedAndCond":
-            self.affine = models.modules.FlowAffineCouplingsAblation.CondAffineSeparatedAndCond(in_channels=in_channels,
-                                                                                                opt=opt)
+            self.affine = models.modules.FlowAffineCouplingsAblation.CondAffineSeparatedAndCond(in_channels=in_channels)
         elif flow_coupling == "noCoupling":
             pass
         else:

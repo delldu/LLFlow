@@ -37,7 +37,7 @@ def find_model_using_name(model_name):
     return model
 
 
-def create_model(opt, step=0, **opt_kwargs):
+def create_model(opt, **opt_kwargs):
     if local_config is not None:
         opt['path']['pretrain_model_G'] = os.path.join(local_config.checkpoint_path, os.path.basename(opt['path']['results_root'] + '.pth'))
 
@@ -49,6 +49,6 @@ def create_model(opt, step=0, **opt_kwargs):
     M = find_model_using_name(model)
 
     # pp step -- 0
-    m = M(opt, step)
+    m = M(opt)
     logger.info('Model [{:s}] is created.'.format(m.__class__.__name__))
     return m

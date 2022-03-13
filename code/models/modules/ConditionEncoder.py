@@ -57,9 +57,8 @@ class RRDB(nn.Module):
 
 
 class ConEncoder1(nn.Module):
-    def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=4, opt=None):
+    def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=4):
         super(ConEncoder1, self).__init__()
-        self.opt = opt
 
         in_nc = in_nc + 3 # concat_histeq
         in_nc = in_nc + 6

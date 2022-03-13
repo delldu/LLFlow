@@ -154,7 +154,7 @@ def main():
     total_epochs = int(math.ceil(total_iters / train_size))
     #### create model
     current_step = 0 if resume_state is None else resume_state['iter']
-    model = create_model(opt, current_step)
+    model = create_model(opt)
     print("Parameters of full network %.4f and encoder %.4f"%(sum([m.numel() for m in model.netG.parameters()])/1e6, sum([m.numel() for m in model.netG.RRDB.parameters()])/1e6))
     #### resume training
     if resume_state:

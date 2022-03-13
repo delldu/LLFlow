@@ -8,19 +8,17 @@ from utils.util import opt_get
 import pdb
 
 class CondAffineSeparatedAndCond(nn.Module):
-    def __init__(self, in_channels, opt):
+    def __init__(self, in_channels):
         super().__init__()
         self.need_features = True
         self.in_channels = in_channels
-        self.in_channels_rrdb = opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
+        self.in_channels_rrdb = 64 # opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
         self.kernel_hidden = 1
-        self.affine_eps = 0.0001
         self.n_hidden_layers = 1
-        hidden_channels = opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'hidden_channels'])
-        self.hidden_channels = 64 if hidden_channels is None else hidden_channels
+        # hidden_channels = opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'hidden_channels'])
+        self.hidden_channels = 64 # if hidden_channels is None else hidden_channels
 
-        self.affine_eps = opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'eps'], 0.0001)
-
+        self.affine_eps = 0.0001 #opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'eps'], 0.0001)
         self.channels_for_nn = self.in_channels // 2
         self.channels_for_co = self.in_channels - self.channels_for_nn # -- 6
 
@@ -39,17 +37,6 @@ class CondAffineSeparatedAndCond(nn.Module):
                                 hidden_channels=self.hidden_channels,
                                 kernel_hidden=self.kernel_hidden,
                                 n_hidden_layers=self.n_hidden_layers)
-        self.opt = opt
-
-        # # opt['le_curve'] -- False
-        self.le_curve = opt['le_curve'] if opt['le_curve'] is not None else False
-        # self.le_curve -- False
-        if self.le_curve:
-            self.fCurve = self.F(in_channels=self.in_channels_rrdb,
-                                 out_channels=self.in_channels,
-                                 hidden_channels=self.hidden_channels,
-                                 kernel_hidden=self.kernel_hidden,
-                                 n_hidden_layers=self.n_hidden_layers)
         # in_channels = 12
 
 
@@ -64,21 +51,6 @@ class CondAffineSeparatedAndCond(nn.Module):
             z = z + shiftFt
             z = z * scaleFt
             logdet = logdet + self.get_logdet(scaleFt)
-
-            # Curve conditional
-            if self.le_curve:
-                # logdet = logdet + thops.sum(torch.log(torch.sigmoid(z) * (1 - torch.sigmoid(z))), dim=[1, 2, 3])
-                # z = torch.sigmoid(z)
-                # alpha = self.fCurve(ft)
-                # alpha = (torch.tanh(alpha + 2.) + self.affine_eps)
-                # logdet = logdet + thops.sum(torch.log((1 + alpha - 2 * z * alpha).abs()), dim=[1, 2, 3])
-                # z = z + alpha * z * (1 - z)
-
-                alpha = self.fCurve(ft)
-                # alpha = (torch.sigmoid(alpha + 2.) + self.affine_eps)
-                alpha = torch.relu(alpha) + self.affine_eps
-                logdet = logdet + thops.sum(torch.log(alpha * torch.pow(z.abs(), alpha - 1)) + self.affine_eps)
-                z = torch.pow(z.abs(), alpha) * z.sign()
 
             # Self Conditional
             z1, z2 = self.split(z)
@@ -102,13 +74,6 @@ class CondAffineSeparatedAndCond(nn.Module):
             z2 = z2 - shift
             z = thops.cat_feature(z1, z2)
             logdet = logdet - self.get_logdet(scale)
-
-            # Curve conditional
-            if self.le_curve:
-                alpha = self.fCurve(ft)
-                alpha = torch.relu(alpha) + self.affine_eps
-                # alpha = (torch.sigmoid(alpha + 2.) + self.affine_eps)
-                z = torch.pow(z.abs(), 1 / alpha) * z.sign()
 
             # Feature Conditional
             scaleFt, shiftFt = self.feature_extract(ft, self.fFeatures)

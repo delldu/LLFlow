@@ -15,13 +15,13 @@ logger = logging.getLogger('base')
 import pdb
 
 class LLFlowModel(BaseModel):
-    def __init__(self, opt, step):
+    def __init__(self, opt):
         super(LLFlowModel, self).__init__(opt)
 
         self.opt = opt
 
         # define network and load pretrained models
-        self.netG = networks.define_Flow(opt, step).to(self.device)
+        self.netG = networks.define_Flow(opt).to(self.device)
 
     def to(self, device):
         self.device = device

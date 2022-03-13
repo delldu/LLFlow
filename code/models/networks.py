@@ -26,13 +26,13 @@ def find_model_using_name(model_name):
 
     return model
 
-def define_Flow(opt, step):
+def define_Flow(opt):
     opt_net = opt['network_G']
     which_model = opt_net['which_model_G']
 
     Arch = find_model_using_name(which_model)
     netG = Arch(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'],
-                nf=opt_net['nf'], nb=opt_net['nb'], scale=opt['scale'], K=opt_net['flow']['K'], opt=opt, step=step)
+                nf=opt_net['nf'], nb=opt_net['nb'], scale=opt['scale'], K=opt_net['flow']['K'])
 
     return netG
 
