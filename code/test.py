@@ -50,18 +50,18 @@ def imwrite(path, img):
     cv2.imwrite(path, img[:, :, [2, 1, 0]])
 
 
-def imCropCenter(img, size):
-    pdb.set_trace()
+# def imCropCenter(img, size):
+#     pdb.set_trace()
 
-    h, w, c = img.shape
+#     h, w, c = img.shape
 
-    h_start = max(h // 2 - size // 2, 0)
-    h_end = min(h_start + size, h)
+#     h_start = max(h // 2 - size // 2, 0)
+#     h_end = min(h_start + size, h)
 
-    w_start = max(w // 2 - size // 2, 0)
-    w_end = min(w_start + size, w)
+#     w_start = max(w // 2 - size // 2, 0)
+#     w_end = min(w_start + size, w)
 
-    return img[h_start:h_end, w_start:w_end]
+#     return img[h_start:h_end, w_start:w_end]
 
 
 def impad(img, top=0, bottom=0, left=0, right=0, color=255):
@@ -144,7 +144,6 @@ def main():
         mean_out = sr_t.view(sr_t.shape[0],-1).mean(dim=1)
         mean_gt = cv2.cvtColor(hr.astype(np.float32), cv2.COLOR_BGR2GRAY).mean()/255
         sr = rgb(torch.clamp(sr_t, 0, 1)*mean_gt/mean_out)
-        # sr = rgb(torch.clamp(sr_t, 0, 1))
 
         sr = sr[:h * scale, :w * scale] # scale -- 1
 
@@ -185,3 +184,9 @@ def format_measurements(meas):
 
 if __name__ == "__main__":
     main()
+    # from models.modules.LLFlow_arch import LLFlow
+    # model = LLFlow()
+    # model.load_state_dict(torch.load("LOL_smallNet.pth"))
+    # model.eval()
+
+    # pdb.set_trace()

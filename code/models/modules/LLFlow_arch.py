@@ -1,44 +1,38 @@
 
-
-
-# import math
-# import random
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# import numpy as np
-# from models.modules.RRDBNet_arch import RRDBNet
 from models.modules.ConditionEncoder import ConEncoder1
 from models.modules.FlowUpsamplerNet import FlowUpsamplerNet
-import models.modules.thops as thops
-# import models.modules.flow as flow
-# from models.modules.color_encoder import ColorEncoder
-# from utils.util import opt_get
+# import models.modules.thops as thops
 from models.modules.flow import squeeze2d
 
 import pdb
 
+# xxxx1111 --> 2, netG
 class LLFlow(nn.Module):
-    def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=4, K=None):
+    def __init__(self, in_nc=3, out_nc=3, nf=32, nb=4, gc=32, scale=1, K=4):
         super(LLFlow, self).__init__()
-        # self.crop_size = 160 # opt['datasets']['train']['GT_size']
-        # self.opt = opt
-
         self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc, scale)
-        K = 4
         hidden_channels = 64
-
         self.flowUpsamplerNet = FlowUpsamplerNet((160, 160, 3), hidden_channels, K,
                              flow_coupling="CondAffineSeparatedAndCond")
+        self.max_pool = nn.MaxPool2d(3)
 
-        # if self.opt['align_maxpool']:
-        self.max_pool = torch.nn.MaxPool2d(3)
+    def forward(self, lr, eps_std):
+        # lr.size()-- [1, 6, 400, 600]
+        # z.size() -- [1, 192, 50, 75]
+        B, C, H, W = lr.shape
+        size = (B, 3 * 8 * 8, H//8, W//8)
+        z = torch.normal(mean=0, std=eps_std, size=size)
+        # z = torch.normal(mean=0, std=heat, size=size)
+        
+        logdet = torch.zeros_like(lr[:, 0, 0, 0])
+        lr_enc = self.rrdbPreprocessing(lr)
+        z = squeeze2d(lr_enc['color_map'], 8)
+        x, logdet = self.flowUpsamplerNet(rrdbResults=lr_enc, z=z, eps_std=eps_std, logdet=logdet)
+        return x, logdet
 
-    # @autocast()
-    def forward(self, gt=None, lr=None, z=None, eps_std=None, reverse=False, lr_enc=None):
-        # with torch.no_grad():
-        return self.reverse_flow(lr, z, eps_std=eps_std, lr_enc=lr_enc)
             
     def rrdbPreprocessing(self, lr):
         rrdbResults = self.RRDB(lr)
@@ -58,20 +52,3 @@ class LLFlow(nn.Module):
 
         return rrdbResults
 
-    # def get_score(self, disc_loss_sigma, z):
-    #     score_real = 0.5 * (1 - 1 / (disc_loss_sigma ** 2)) * thops.sum(z ** 2, dim=[1, 2, 3]) - \
-    #                  z.shape[1] * z.shape[2] * z.shape[3] * math.log(disc_loss_sigma)
-    #     return -score_real
-
-    def reverse_flow(self, lr, z, eps_std, lr_enc=None):
-
-        logdet = torch.zeros_like(lr[:, 0, 0, 0])
-        # pixels = thops.pixels(lr) * self.opt['scale'] ** 2  # self.opt['scale'] -- 1
-        pixels = thops.pixels(lr)
-
-        if lr_enc is None and self.RRDB:
-            lr_enc = self.rrdbPreprocessing(lr)
-
-        z = squeeze2d(lr_enc['color_map'], 8)
-        x, logdet = self.flowUpsamplerNet(rrdbResults=lr_enc, z=z, eps_std=eps_std, reverse=True, logdet=logdet)
-        return x, logdet

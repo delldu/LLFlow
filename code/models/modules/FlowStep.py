@@ -13,6 +13,7 @@ from models.modules import FlowAffineCouplingsAblation
 
 import pdb
 
+# xxxx1111
 class FlowStep(nn.Module):
     # FlowPermutation = {
     #     "reverse": lambda obj, z, logdet, rev: (obj.reverse(z, rev), logdet),

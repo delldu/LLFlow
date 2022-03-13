@@ -14,6 +14,7 @@ logger = logging.getLogger('base')
 
 import pdb
 
+# xxxx1111  --> 1
 class LLFlowModel(BaseModel):
     def __init__(self, opt):
         super(LLFlowModel, self).__init__(opt)
@@ -29,19 +30,17 @@ class LLFlowModel(BaseModel):
 
 
     def get_sr(self, lq, heat=None):
-        return self.get_sr_with_z(lq, heat)[0]
+        return self.get_sr_with_z(lq, heat)
 
 
     def get_sr_with_z(self, lq, heat=None):
         self.netG.eval()
-        if heat is None:
-            heat = 0
-        z = self.get_z(heat, batch_size=lq.shape[0], lr_shape=lq.shape) # if z is None and epses is None else z
-        # heat -- 0, seed -- None, lq.size() -- [1, 6, 400, 600], z.size() -- [1, 192, 50, 75]
+        # z = self.get_z(heat, batch_size=lq.shape[0], lr_shape=lq.shape) # if z is None and epses is None else z
+        # heat -- 0, lq.size() -- [1, 6, 400, 600]
         with torch.no_grad():
-            sr, logdet = self.netG(lr=lq, z=z, eps_std=heat, reverse=True)
+            sr, logdet = self.netG(lr=lq, eps_std=heat)
         self.netG.train()
-        return sr, z
+        return sr
 
     def get_z(self, heat, batch_size=1, lr_shape=None):
         H = int(lr_shape[2] // self.netG.flowUpsamplerNet.scaleH)

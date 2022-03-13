@@ -4,18 +4,16 @@ from torch import nn as nn
 
 from models.modules import thops
 from models.modules.flow import Conv2d, Conv2dZeros
-from utils.util import opt_get
+# from utils.util import opt_get
 import pdb
 
+# xxxx1111
 class CondAffineSeparatedAndCond(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.need_features = True
         self.in_channels = in_channels
         self.in_channels_rrdb = 64 # opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
-        # self.kernel_hidden = 1
-        # self.n_hidden_layers = 1
-        # hidden_channels = opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'hidden_channels'])
         self.hidden_channels = 64 # if hidden_channels is None else hidden_channels
 
         self.affine_eps = 0.0001 #opt_get(opt, ['network_G', 'flow', 'CondAffineSeparatedAndCond', 'eps'], 0.0001)
@@ -55,7 +53,7 @@ class CondAffineSeparatedAndCond(nn.Module):
             # Self Conditional
             z1, z2 = self.split(z)
             scale, shift = self.feature_extract_aff(z1, ft, self.fAffine)
-            self.asserts(scale, shift, z1, z2)
+            # self.asserts(scale, shift, z1, z2)
             z2 = z2 + shift
             z2 = z2 * scale
 
@@ -69,7 +67,7 @@ class CondAffineSeparatedAndCond(nn.Module):
             # Self Conditional
             z1, z2 = self.split(z)
             scale, shift = self.feature_extract_aff(z1, ft, self.fAffine)
-            self.asserts(scale, shift, z1, z2)
+            # self.asserts(scale, shift, z1, z2)
             z2 = z2 / scale
             z2 = z2 - shift
             z = thops.cat_feature(z1, z2)
@@ -84,11 +82,11 @@ class CondAffineSeparatedAndCond(nn.Module):
             output = z
         return output, logdet
 
-    def asserts(self, scale, shift, z1, z2):
-        assert z1.shape[1] == self.channels_for_nn, (z1.shape[1], self.channels_for_nn)
-        assert z2.shape[1] == self.channels_for_co, (z2.shape[1], self.channels_for_co)
-        assert scale.shape[1] == shift.shape[1], (scale.shape[1], shift.shape[1])
-        assert scale.shape[1] == z2.shape[1], (scale.shape[1], z1.shape[1], z2.shape[1])
+    # def asserts(self, scale, shift, z1, z2):
+    #     assert z1.shape[1] == self.channels_for_nn, (z1.shape[1], self.channels_for_nn)
+    #     assert z2.shape[1] == self.channels_for_co, (z2.shape[1], self.channels_for_co)
+    #     assert scale.shape[1] == shift.shape[1], (scale.shape[1], shift.shape[1])
+    #     assert scale.shape[1] == z2.shape[1], (scale.shape[1], z1.shape[1], z2.shape[1])
 
     def get_logdet(self, scale):
         return thops.sum(torch.log(scale), dim=[1, 2, 3])
