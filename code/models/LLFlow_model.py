@@ -35,20 +35,11 @@ class LLFlowModel(BaseModel):
 
     def get_sr_with_z(self, lq, heat=None):
         self.netG.eval()
-        # z = self.get_z(heat, batch_size=lq.shape[0], lr_shape=lq.shape) # if z is None and epses is None else z
         # heat -- 0, lq.size() -- [1, 6, 400, 600]
         with torch.no_grad():
             sr, logdet = self.netG(lr=lq, eps_std=heat)
         self.netG.train()
         return sr
-
-    def get_z(self, heat, batch_size=1, lr_shape=None):
-        H = int(lr_shape[2] // self.netG.flowUpsamplerNet.scaleH)
-        W = int(lr_shape[3] // self.netG.flowUpsamplerNet.scaleW)
-        
-        size = (batch_size, 3 * 8 * 8, H, W)
-        z = torch.normal(mean=0, std=heat, size=size)
-        return z
 
     def load(self):
         _, get_resume_model_path = get_resume_paths(self.opt)

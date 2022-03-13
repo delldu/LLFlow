@@ -22,11 +22,12 @@ class LLFlow(nn.Module):
     def forward(self, lr, eps_std):
         # lr.size()-- [1, 6, 400, 600]
         # z.size() -- [1, 192, 50, 75]
+
+        # make noise tensor
         B, C, H, W = lr.shape
         size = (B, 3 * 8 * 8, H//8, W//8)
         z = torch.normal(mean=0, std=eps_std, size=size)
-        # z = torch.normal(mean=0, std=heat, size=size)
-        
+
         logdet = torch.zeros_like(lr[:, 0, 0, 0])
         lr_enc = self.rrdbPreprocessing(lr)
         z = squeeze2d(lr_enc['color_map'], 8)

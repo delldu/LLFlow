@@ -2,13 +2,9 @@ import numpy as np
 import torch
 from torch import nn as nn
 
-# import models.modules.Split
 from models.modules import flow
-#, thops
-# from models.modules.Split import Split2d
 from models.modules.glow_arch import f_conv2d_bias
 from models.modules.FlowStep import FlowStep
-# from utils.util import opt_get
 
 import pdb
 
@@ -56,10 +52,6 @@ class FlowUpsamplerNet(nn.Module):
 
         self.f = f_conv2d_bias(affineInCh, 2 * 3 * 64)
 
-        # self.H = H
-        # self.W = W        
-        # self.scaleH = 160 // H # -- 1
-        # self.scaleW = 160 // W # -- 1
 
     def arch_FlowStep(self, H, K, W, actnorm_scale, affineInCh, flow_coupling, flow_permutation,
                       hidden_channels):
