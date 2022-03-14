@@ -279,14 +279,12 @@ class ConEncoder1(nn.Module):
         fea_down2 = fea_head + trunk
 
         fea_down4 = self.downconv1(
-            F.interpolate(
-                fea_down2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=True
-            )
+            F.interpolate(fea_down2, scale_factor=0.5, mode="bilinear", align_corners=False)
         )
         fea = self.lrelu(fea_down4)
 
         fea_down8 = self.downconv2(
-            F.interpolate(fea, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=True)
+            F.interpolate(fea, scale_factor=0.5, mode="bilinear", align_corners=False)
         )
 
         results = {
@@ -356,6 +354,8 @@ class SqueezeLayer(nn.Module):
         self.factor = factor
 
     def forward(self, input, logdet, reverse:bool=False) -> List[torch.Tensor]:
+        print("SqueezeLayer reverse: ", reverse)
+
         if not reverse:
             output = squeeze2d(input, self.factor)  # Squeeze in forward
             return output, logdet
@@ -368,13 +368,9 @@ class FlowStep(nn.Module):
     def __init__(
         self, in_channels, hidden_channels, actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive"
     ):
-        # check configures
-        # assert flow_permutation in FlowStep.FlowPermutation, \
-        #     "float_permutation should be in `{}`".format(FlowStep.FlowPermutation.keys())
         super().__init__()
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
-
 
         # 1. actnorm
         self.actnorm = ActNorm2d(in_channels, actnorm_scale)
@@ -395,32 +391,18 @@ class FlowStep(nn.Module):
     def forward(self, input, logdet, rrdbResults: List[torch.Tensor])-> List[torch.Tensor]:
         return self.reverse_flow(input, logdet, rrdbResults)
 
-    def reverse_flow(self, z, logdet, rrdbResults:bool=None):
-
-        # need_features = self.affine_need_features()  # True
-        # print("need_features: ", need_features)
-
+    def reverse_flow(self, z, logdet, rrdbResults:bool=None)->List[torch.Tensor]:
         # 1.coupling
-        # need_features:  True self.flow_coupling:  CondAffineSeparatedAndCond
-        # need_features:  False self.flow_coupling:  noCoupling
         if self.need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
-            z, logdet = self.affine(z, logdet, rrdbResults, True)
+            z, logdet = self.affine(z, logdet, rrdbResults)
 
         # 2. permute
-        z, logdet = self.invconv(z, logdet, True)
+        z, logdet = self.invconv(z, logdet)
 
         # 3. actnorm
         z, logdet = self.actnorm(z, logdet=logdet, reverse=True)
 
         return z, logdet
-
-    # def affine_need_features(self):
-    #     need_features = False
-    #     try:
-    #         need_features = self.affine.need_features
-    #     except:
-    #         pass
-    #     return need_features
 
 
 class _ActNorm(nn.Module):
@@ -479,8 +461,7 @@ class _ActNorm(nn.Module):
             logs = logs + offset
 
         if not reverse:
-            input = input * torch.exp(logs)  # should have shape batchsize, n_channels, 1, 1
-            # input = input * torch.exp(logs+logs_offset)
+            input = input * torch.exp(logs)
         else:
             input = input * torch.exp(-logs)
         if logdet is not None:
@@ -495,6 +476,9 @@ class _ActNorm(nn.Module):
         return input, logdet
 
     def forward(self, input, logdet=None, offset_mask=None, logs_offset=None, bias_offset=None, reverse=False):
+        print("---- _ActNorm reverse: ", reverse)
+        print("offset_mask -- ", offset_mask, "logs_offset --", logs_offset, "bias_offset --", bias_offset)
+
         if not self.inited:
             self.initialize_parameters(input)
         self._check_input_dim(input)
@@ -502,15 +486,11 @@ class _ActNorm(nn.Module):
         if offset_mask is not None:
             logs_offset *= offset_mask
             bias_offset *= offset_mask
-        # no need to permute dims as old version
         if not reverse:
             # center and scale
-
-            # self.input = input
             input = self._center(input, bias_offset, reverse)
             input, logdet = self._scale(input, logdet, logs_offset, reverse)
         else:
-            # scale and center
             input, logdet = self._scale(input, logdet, logs_offset, reverse)
             input = self._center(input, bias_offset, reverse)
         return input, logdet
@@ -538,50 +518,23 @@ class InvertibleConv1x1(nn.Module):
         self.w_shape = w_shape
         # num_channels -- 12
 
-    def get_weight(self, input, reverse):
+    def get_weight(self, input)->List[torch.Tensor]:
         w_shape = self.w_shape
         pixels = thops.pixels(input)
-        dlogdet = torch.tensor(float("inf"))
-        while torch.isinf(dlogdet):
-            try:
-                dlogdet = torch.slogdet(self.weight)[1] * pixels
-            except Exception as e:
-                print(e)
-                dlogdet = (
-                    torch.slogdet(
-                        self.weight + (self.weight.mean() * torch.randn(*self.w_shape).to(input.device) * 0.001)
-                    )[1]
-                    * pixels
-                )
-        if not reverse:
-            weight = self.weight.view(w_shape[0], w_shape[1], 1, 1)
-        else:
-            try:
-                weight = torch.inverse(self.weight.double()).float().view(w_shape[0], w_shape[1], 1, 1)
-            except:
-                weight = torch.inverse(
-                    self.weight.double()
-                    + (self.weight.mean() * torch.randn(*self.w_shape).to(input.device) * 0.001)
-                    .float()
-                    .view(w_shape[0], w_shape[1], 1, 1)
-                )
+        dlogdet = torch.slogdet(self.weight)[1] * pixels
+        weight = torch.inverse(self.weight.double()).float().view(w_shape[0], w_shape[1], 1, 1)
+
         return weight, dlogdet
 
-    def forward(self, input, logdet=None, reverse=False):
+    def forward(self, input, logdet=None)->List[torch.Tensor]:
         """
         log-det = log|abs(|W|)| * pixels
         """
-        weight, dlogdet = self.get_weight(input, reverse)
-        if not reverse:
-            z = F.conv2d(input, weight)
-            if logdet is not None:
-                logdet = logdet + dlogdet
-            return z, logdet
-        else:
-            z = F.conv2d(input, weight)
-            if logdet is not None:
-                logdet = logdet - dlogdet
-            return z, logdet
+        weight, dlogdet = self.get_weight(input)
+        z = F.conv2d(input, weight)
+        if logdet is not None:
+            logdet = logdet - dlogdet
+        return z, logdet
 
 
 class CondAffineSeparatedAndCond(nn.Module):
@@ -617,67 +570,44 @@ class CondAffineSeparatedAndCond(nn.Module):
         )
         # in_channels = 12
 
-    def forward(self, input: torch.Tensor, logdet=None, ft=None, reverse=False):
-        # reverse -- True
-        if not reverse:
-            z = input
-            assert z.shape[1] == self.in_channels, (z.shape[1], self.in_channels)
+    def forward(self, input: torch.Tensor, logdet=None, ft=None)->List[torch.Tensor]:
+        z = input
 
-            # Feature Conditional
-            scaleFt, shiftFt = self.feature_extract(ft, self.fFeatures)
-            z = z + shiftFt
-            z = z * scaleFt
-            logdet = logdet + self.get_logdet(scaleFt)
+        # Self Conditional
+        z1, z2 = self.split(z)
+        scale, shift = self.feature_extract_aff(z1, ft, self.fAffine)
+        # self.asserts(scale, shift, z1, z2)
+        z2 = z2 / scale
+        z2 = z2 - shift
+        z = torch.cat((z1, z2), dim=1)
+        logdet = logdet - self.get_logdet(scale)
 
-            # Self Conditional
-            z1, z2 = self.split(z)
-            scale, shift = self.feature_extract_aff(z1, ft, self.fAffine)
-            # self.asserts(scale, shift, z1, z2)
-            z2 = z2 + shift
-            z2 = z2 * scale
+        # Feature Conditional
+        scaleFt, shiftFt = self.feature_extract(ft, self.fFeatures)
+        z = z / scaleFt
+        z = z - shiftFt
+        logdet = logdet - self.get_logdet(scaleFt)
 
-            logdet = logdet + self.get_logdet(scale)
-            z = torch.cat((z1, z2), dim=1)
-            output = z
-        else:
-            # ===> Reach here
-            z = input
-
-            # Self Conditional
-            z1, z2 = self.split(z)
-            scale, shift = self.feature_extract_aff(z1, ft, self.fAffine)
-            # self.asserts(scale, shift, z1, z2)
-            z2 = z2 / scale
-            z2 = z2 - shift
-            z = torch.cat((z1, z2), dim=1)
-            logdet = logdet - self.get_logdet(scale)
-
-            # Feature Conditional
-            scaleFt, shiftFt = self.feature_extract(ft, self.fFeatures)
-            z = z / scaleFt
-            z = z - shiftFt
-            logdet = logdet - self.get_logdet(scaleFt)
-
-            output = z
+        output = z
         return output, logdet
 
     def get_logdet(self, scale):
         return thops.sum(torch.log(scale), dim=[1, 2, 3])
 
-    def feature_extract(self, z, f):
+    def feature_extract(self, z, f)->List[torch.Tensor]:
         h = f(z)
         shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
 
-    def feature_extract_aff(self, z1, ft, f):
+    def feature_extract_aff(self, z1, ft, f)->List[torch.Tensor]:
         z = torch.cat([z1, ft], dim=1)
         h = f(z)
         shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
 
-    def split(self, z):
+    def split(self, z)->List[torch.Tensor]:
         z1 = z[:, : self.channels_for_nn]
         z2 = z[:, self.channels_for_nn :]
         assert z1.shape[1] + z2.shape[1] == z.shape[1], (z1.shape[1], z2.shape[1], z.shape[1])
@@ -735,6 +665,7 @@ class Conv2d(nn.Conv2d):
             self.actnorm = ActNorm2d(out_channels)
         self.do_actnorm = do_actnorm
         # do_actnorm = True
+        print("---- do_actnorm: ", do_actnorm)
 
     def forward(self, input):
         x = super().forward(input)

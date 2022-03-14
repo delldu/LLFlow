@@ -18,17 +18,6 @@ def mean(tensor, dim: List[int]):
     return tensor
 
 
-# def split_feature(tensor, type="split"):
-#     """
-#     type = ["split", "cross"]
-#     """
-#     C = tensor.size(1)
-#     if type == "split":
-#         return tensor[:, :C // 2, ...], tensor[:, C // 2:, ...]
-#     elif type == "cross":
-#         return tensor[:, 0::2, ...], tensor[:, 1::2, ...]
-
-
 def split_cross(tensor):
     return tensor[:, 0::2, ...], tensor[:, 1::2, ...]
 
