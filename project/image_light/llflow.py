@@ -35,8 +35,8 @@ class LLFlow(nn.Module):
     def forward(self, x):
         log_lr = torch.log(torch.clamp(x + 1e-3, min=1e-3))
         x255 = x * 255.0
-        heq_lr = TF.equalize(x255.to(torch.uint8)).float()/255.0
-        lr = torch.cat((log_lr, heq_lr), dim = 1)
+        heq_lr = TF.equalize(x255.to(torch.uint8)).float() / 255.0
+        lr = torch.cat((log_lr, heq_lr), dim=1)
         # lr.size()-- [1, 6, 400, 600]
 
         # make noise tensor
@@ -74,9 +74,7 @@ class LLFlow(nn.Module):
 
 
 class FlowUpsamplerNet(nn.Module):
-    def __init__(
-        self, image_shape, hidden_channels, K, L=None, flow_permutation=None, flow_coupling="affine"
-    ):
+    def __init__(self, image_shape, hidden_channels, K, L=None, flow_permutation=None, flow_coupling="affine"):
 
         super().__init__()
 
@@ -109,9 +107,7 @@ class FlowUpsamplerNet(nn.Module):
 
             # 2. K FlowStep
             self.arch_additionalFlowAffine(H, W, hidden_channels)
-            self.arch_FlowStep(
-                H, self.K[level], W, affineInCh, flow_coupling, flow_permutation, hidden_channels
-            )
+            self.arch_FlowStep(H, self.K[level], W, affineInCh, flow_coupling, flow_permutation, hidden_channels)
 
         self.f = f_conv2d_bias(affineInCh, 2 * 3 * 64)
 
@@ -147,11 +143,7 @@ class FlowUpsamplerNet(nn.Module):
         self.output_shapes.append([-1, self.C, H, W])
         return H, W
 
-    def forward(self, rrdbResults=None, z=None, logdet=0.0, eps_std=None):
-        sr, logdet = self.decode(rrdbResults, z, eps_std, logdet=logdet)
-        return sr, logdet
-
-    def decode(self, rrdbResults, z, eps_std=None, logdet=0.0):
+    def forward(self, rrdbResults: List[torch.Tensor], z, logdet, eps_std: float):
         fl_fea = z
         level_conditionals = {}
         for level in range(self.L + 1):
@@ -167,7 +159,7 @@ class FlowUpsamplerNet(nn.Module):
             if isinstance(layer, FlowStep):
                 fl_fea, logdet = layer(fl_fea, logdet=logdet, rrdbResults=level_conditionals[level])
             else:
-                fl_fea, logdet = layer(fl_fea, logdet=logdet) # SqueezeLayer
+                fl_fea, logdet = layer(fl_fea, logdet=logdet)  # SqueezeLayer
 
         sr = fl_fea
         assert sr.shape[1] == 3
@@ -340,9 +332,7 @@ class SqueezeLayer(nn.Module):
 
 
 class FlowStep(nn.Module):
-    def __init__(
-        self, in_channels, hidden_channels, flow_permutation="invconv", flow_coupling="additive"
-    ):
+    def __init__(self, in_channels, hidden_channels, flow_permutation="invconv", flow_coupling="additive"):
         super().__init__()
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
@@ -363,10 +353,10 @@ class FlowStep(nn.Module):
         else:
             raise RuntimeError("coupling not Found:", flow_coupling)
 
-    def forward(self, input, logdet, rrdbResults: List[torch.Tensor])-> List[torch.Tensor]:
+    def forward(self, input, logdet, rrdbResults: List[torch.Tensor]) -> List[torch.Tensor]:
         return self.reverse_flow(input, logdet, rrdbResults)
 
-    def reverse_flow(self, z, logdet, rrdbResults:bool=None)->List[torch.Tensor]:
+    def reverse_flow(self, z, logdet, rrdbResults: List[torch.Tensor]) -> List[torch.Tensor]:
         # 1.coupling
         if self.need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
             z, logdet = self.affine(z, logdet, rrdbResults)
@@ -395,16 +385,13 @@ class ActNorm2d(nn.Module):
         self.register_parameter("bias", nn.Parameter(torch.zeros(*size)))
         self.register_parameter("logs", nn.Parameter(torch.zeros(*size)))
 
-
-    def _center(self, input, reverse: bool =False):
-        bias = self.bias
-
+    def _center(self, input, reverse: bool = False):
         if not reverse:
-            return input + bias
+            return input + self.bias
         else:
-            return input - bias
+            return input - self.bias
 
-    def _scale(self, input, logdet, reverse:bool =False):
+    def _scale(self, input, logdet, reverse: bool = False) -> List[torch.Tensor]:
         logs = self.logs
 
         if not reverse:
@@ -422,7 +409,7 @@ class ActNorm2d(nn.Module):
             logdet = logdet + dlogdet
         return input, logdet
 
-    def forward(self, input, logdet=None, reverse:bool =False):
+    def forward(self, input, logdet, reverse: bool = False) -> List[torch.Tensor]:
         if not reverse:
             # center and scale
             input = self._center(input, reverse)
@@ -442,7 +429,7 @@ class InvertibleConv1x1(nn.Module):
         self.w_shape = w_shape
         # num_channels -- 12
 
-    def get_weight(self, input)->List[torch.Tensor]:
+    def get_weight(self, input) -> List[torch.Tensor]:
         w_shape = self.w_shape
         pixels = thops.pixels(input)
         dlogdet = torch.slogdet(self.weight)[1] * pixels
@@ -450,7 +437,7 @@ class InvertibleConv1x1(nn.Module):
 
         return weight, dlogdet
 
-    def forward(self, input, logdet=None)->List[torch.Tensor]:
+    def forward(self, input, logdet) -> List[torch.Tensor]:
         """
         log-det = log|abs(|W|)| * pixels
         """
@@ -494,13 +481,12 @@ class CondAffineSeparatedAndCond(nn.Module):
         )
         # in_channels = 12
 
-    def forward(self, input: torch.Tensor, logdet=None, ft=None)->List[torch.Tensor]:
+    def forward(self, input, logdet, ft) -> List[torch.Tensor]:
         z = input
 
         # Self Conditional
         z1, z2 = self.split(z)
         scale, shift = self.feature_extract_aff(z1, ft, self.fAffine)
-        # self.asserts(scale, shift, z1, z2)
         z2 = z2 / scale
         z2 = z2 - shift
         z = torch.cat((z1, z2), dim=1)
@@ -518,23 +504,22 @@ class CondAffineSeparatedAndCond(nn.Module):
     def get_logdet(self, scale):
         return thops.sum(torch.log(scale), dim=[1, 2, 3])
 
-    def feature_extract(self, z, f)->List[torch.Tensor]:
+    def feature_extract(self, z, f) -> List[torch.Tensor]:
         h = f(z)
         shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
 
-    def feature_extract_aff(self, z1, ft, f)->List[torch.Tensor]:
+    def feature_extract_aff(self, z1, ft, f) -> List[torch.Tensor]:
         z = torch.cat([z1, ft], dim=1)
         h = f(z)
         shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
 
-    def split(self, z)->List[torch.Tensor]:
+    def split(self, z) -> List[torch.Tensor]:
         z1 = z[:, : self.channels_for_nn]
         z2 = z[:, self.channels_for_nn :]
-        assert z1.shape[1] + z2.shape[1] == z.shape[1], (z1.shape[1], z2.shape[1], z.shape[1])
         return z1, z2
 
     def F(self, in_channels, out_channels, hidden_channels=64, kernel_hidden=1, n_hidden_layers=1):
@@ -586,7 +571,7 @@ class Conv2d(nn.Conv2d):
 
     def forward(self, input):
         x = super().forward(input)
-        x, _ = self.actnorm(x)
+        x, _ = self.actnorm(x, None)
         return x
 
 

@@ -7,7 +7,7 @@ def sum(tensor, dim: List[int]):
     for d in dim:
         tensor = tensor.sum(dim=d, keepdim=True)
     for i, d in enumerate(dim):
-        tensor.squeeze_(d-i)
+        tensor.squeeze_(d - i)
     return tensor
 
 
@@ -20,7 +20,6 @@ def mean(tensor, dim: List[int]):
 
 def split_cross(tensor):
     return tensor[:, 0::2, ...], tensor[:, 1::2, ...]
-
 
 
 def cat_feature(tensor_a, tensor_b):
