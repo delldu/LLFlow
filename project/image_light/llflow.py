@@ -355,7 +355,7 @@ class SqueezeLayer(nn.Module):
         super().__init__()
         self.factor = factor
 
-    def forward(self, input, logdet=None, reverse=False):
+    def forward(self, input, logdet, reverse:bool=False) -> List[torch.Tensor]:
         if not reverse:
             output = squeeze2d(input, self.factor)  # Squeeze in forward
             return output, logdet
@@ -383,25 +383,28 @@ class FlowStep(nn.Module):
         self.invconv = InvertibleConv1x1(in_channels)
 
         # 3. coupling
+        self.need_features = False
         if flow_coupling == "CondAffineSeparatedAndCond":
             self.affine = CondAffineSeparatedAndCond(in_channels=in_channels)
+            self.need_features = self.affine.need_features
         elif flow_coupling == "noCoupling":
             pass
         else:
             raise RuntimeError("coupling not Found:", flow_coupling)
 
-    def forward(self, input, logdet=None, rrdbResults=None):
+    def forward(self, input, logdet, rrdbResults: List[torch.Tensor])-> List[torch.Tensor]:
         return self.reverse_flow(input, logdet, rrdbResults)
 
-    def reverse_flow(self, z, logdet, rrdbResults=None):
+    def reverse_flow(self, z, logdet, rrdbResults:bool=None):
 
-        need_features = self.affine_need_features()  # True
+        # need_features = self.affine_need_features()  # True
+        # print("need_features: ", need_features)
 
         # 1.coupling
         # need_features:  True self.flow_coupling:  CondAffineSeparatedAndCond
         # need_features:  False self.flow_coupling:  noCoupling
-        if need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
-            z, logdet = self.affine(input=z, logdet=logdet, reverse=True, ft=rrdbResults)
+        if self.need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
+            z, logdet = self.affine(z, logdet, rrdbResults, True)
 
         # 2. permute
         z, logdet = self.invconv(z, logdet, True)
@@ -411,13 +414,13 @@ class FlowStep(nn.Module):
 
         return z, logdet
 
-    def affine_need_features(self):
-        need_features = False
-        try:
-            need_features = self.affine.need_features
-        except:
-            pass
-        return need_features
+    # def affine_need_features(self):
+    #     need_features = False
+    #     try:
+    #         need_features = self.affine.need_features
+    #     except:
+    #         pass
+    #     return need_features
 
 
 class _ActNorm(nn.Module):
@@ -458,7 +461,7 @@ class _ActNorm(nn.Module):
             self.logs.data.copy_(logs.data)
             self.inited = True
 
-    def _center(self, input, reverse=False, offset=None):
+    def _center(self, input, offset=None, reverse=False):
         bias = self.bias
 
         if offset is not None:
@@ -469,7 +472,7 @@ class _ActNorm(nn.Module):
         else:
             return input - bias
 
-    def _scale(self, input, logdet=None, reverse=False, offset=None):
+    def _scale(self, input, logdet=None, offset=None, reverse=False):
         logs = self.logs
 
         if offset is not None:
@@ -491,7 +494,7 @@ class _ActNorm(nn.Module):
             logdet = logdet + dlogdet
         return input, logdet
 
-    def forward(self, input, logdet=None, reverse=False, offset_mask=None, logs_offset=None, bias_offset=None):
+    def forward(self, input, logdet=None, offset_mask=None, logs_offset=None, bias_offset=None, reverse=False):
         if not self.inited:
             self.initialize_parameters(input)
         self._check_input_dim(input)
@@ -504,12 +507,12 @@ class _ActNorm(nn.Module):
             # center and scale
 
             # self.input = input
-            input = self._center(input, reverse, bias_offset)
-            input, logdet = self._scale(input, logdet, reverse, logs_offset)
+            input = self._center(input, bias_offset, reverse)
+            input, logdet = self._scale(input, logdet, logs_offset, reverse)
         else:
             # scale and center
-            input, logdet = self._scale(input, logdet, reverse, logs_offset)
-            input = self._center(input, reverse, bias_offset)
+            input, logdet = self._scale(input, logdet, logs_offset, reverse)
+            input = self._center(input, bias_offset, reverse)
         return input, logdet
 
 
@@ -614,7 +617,7 @@ class CondAffineSeparatedAndCond(nn.Module):
         )
         # in_channels = 12
 
-    def forward(self, input: torch.Tensor, logdet=None, reverse=False, ft=None):
+    def forward(self, input: torch.Tensor, logdet=None, ft=None, reverse=False):
         # reverse -- True
         if not reverse:
             z = input
