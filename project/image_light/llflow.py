@@ -13,9 +13,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 import functools
 import numpy as np
 from . import thops
+from typing import List
 
 import pdb
 
@@ -30,16 +32,19 @@ class LLFlow(nn.Module):
         )
         self.max_pool = nn.MaxPool2d(3)
 
-    def forward(self, lr):
-        eps_std = 1.0
-
+    def forward(self, x):
+        log_lr = torch.log(torch.clamp(x + 1e-3, min=1e-3))
+        x255 = x * 255.0
+        heq_lr = TF.equalize(x255.to(torch.uint8)).float()/255.0
+        lr = torch.cat((log_lr, heq_lr), dim = 1)
         # lr.size()-- [1, 6, 400, 600]
-        # z.size() -- [1, 192, 50, 75]
 
         # make noise tensor
+        eps_std = 0.5
         B, C, H, W = lr.shape
         size = (B, 3 * 8 * 8, H // 8, W // 8)
         z = torch.normal(mean=0, std=eps_std, size=size)
+        # z.size() -- [1, 192, 50, 75]
 
         logdet = torch.zeros_like(lr[:, 0, 0, 0])
         lr_enc = self.rrdbPreprocessing(lr)
@@ -252,7 +257,7 @@ class ConEncoder1(nn.Module):
         raw_low_input = x[:, 0:3].exp()
         awb_weight = 1  # (1 + self.awb_para(fea_for_awb).unsqueeze(2).unsqueeze(3))
         low_after_awb = raw_low_input * awb_weight
-        color_map = low_after_awb / (low_after_awb.sum(dim=1, keepdims=True) + 1e-4)
+        color_map = low_after_awb / (low_after_awb.sum(dim=1, keepdim=True) + 1e-4)
         dx, dy = self.gradient(color_map)
         noise_map = torch.max(torch.stack([dx.abs(), dy.abs()], dim=0), dim=0)[0]
 
@@ -275,13 +280,13 @@ class ConEncoder1(nn.Module):
 
         fea_down4 = self.downconv1(
             F.interpolate(
-                fea_down2, scale_factor=1 / 2, mode="bilinear", align_corners=False, recompute_scale_factor=True
+                fea_down2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=True
             )
         )
         fea = self.lrelu(fea_down4)
 
         fea_down8 = self.downconv2(
-            F.interpolate(fea, scale_factor=1 / 2, mode="bilinear", align_corners=False, recompute_scale_factor=True)
+            F.interpolate(fea, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=True)
         )
 
         results = {
@@ -290,26 +295,26 @@ class ConEncoder1(nn.Module):
             "fea_up2": fea_down2,
             "fea_up4": fea_head,
             "last_lr_fea": fea_down4,
-            "color_map": self.fine_tune_color_map(F.interpolate(fea_down2, scale_factor=2)),
+            "color_map": self.fine_tune_color_map(F.interpolate(fea_down2, scale_factor=2.0)),
         }
 
         for k, v in block_results.items():
             results[k] = v
         return results
 
-    def gradient(self, x):
-        def sub_gradient(x):
-            left_shift_x, right_shift_x, grad = torch.zeros_like(x), torch.zeros_like(x), torch.zeros_like(x)
-            left_shift_x[:, :, 0:-1] = x[:, :, 1:]
-            right_shift_x[:, :, 1:] = x[:, :, 0:-1]
-            grad = 0.5 * (left_shift_x - right_shift_x)
-            return grad
+    def sub_gradient(self, x):
+        left_shift_x, right_shift_x, grad = torch.zeros_like(x), torch.zeros_like(x), torch.zeros_like(x)
+        left_shift_x[:, :, 0:-1] = x[:, :, 1:]
+        right_shift_x[:, :, 1:] = x[:, :, 0:-1]
+        grad = 0.5 * (left_shift_x - right_shift_x)
+        return grad
 
-        return sub_gradient(x), sub_gradient(torch.transpose(x, 2, 3)).transpose(2, 3)
+    def gradient(self, x) -> List[torch.Tensor]:
+        return self.sub_gradient(x), self.sub_gradient(torch.transpose(x, 2, 3)).transpose(2, 3)
 
 
-def squeeze2d(input, factor=2):
-    assert factor >= 1 and isinstance(factor, int)
+def squeeze2d(input, factor: int):
+    # assert factor >= 1 and isinstance(factor, int)
     if factor == 1:
         return input
     size = input.size()
@@ -317,7 +322,7 @@ def squeeze2d(input, factor=2):
     C = size[1]
     H = size[2]
     W = size[3]
-    assert H % factor == 0 and W % factor == 0, "{}".format((H, W, factor))
+    # assert H % factor == 0 and W % factor == 0, "{}".format((H, W, factor))
     x = input.view(B, C, H // factor, factor, W // factor, factor)
     x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
     x = x.view(B, C * factor * factor, H // factor, W // factor)
@@ -331,8 +336,7 @@ def make_layer(block, n_layers):
     return nn.Sequential(*layers)
 
 
-def squeeze2d(input, factor=2):
-    assert factor >= 1 and isinstance(factor, int)
+def unsqueeze2d(input, factor: int):
     if factor == 1:
         return input
     size = input.size()
@@ -340,27 +344,9 @@ def squeeze2d(input, factor=2):
     C = size[1]
     H = size[2]
     W = size[3]
-    assert H % factor == 0 and W % factor == 0, "{}".format((H, W, factor))
-    x = input.view(B, C, H // factor, factor, W // factor, factor)
-    x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
-    x = x.view(B, C * factor * factor, H // factor, W // factor)
-    return x
-
-
-def unsqueeze2d(input, factor=2):
-    assert factor >= 1 and isinstance(factor, int)
-    factor2 = factor**2
-    if factor == 1:
-        return input
-    size = input.size()
-    B = size[0]
-    C = size[1]
-    H = size[2]
-    W = size[3]
-    assert C % (factor2) == 0, "{}".format(C)
-    x = input.view(B, C // factor2, factor, factor, H, W)
+    x = input.view(B, C // (factor * factor), factor, factor, H, W)
     x = x.permute(0, 1, 4, 2, 5, 3).contiguous()
-    x = x.view(B, C // (factor2), H * factor, W * factor)
+    x = x.view(B, C // (factor * factor), H * factor, W * factor)
     return x
 
 
@@ -379,12 +365,6 @@ class SqueezeLayer(nn.Module):
 
 
 class FlowStep(nn.Module):
-    # FlowPermutation = {
-    #     "reverse": lambda obj, z, logdet, rev: (obj.reverse(z, rev), logdet),
-    #     "shuffle": lambda obj, z, logdet, rev: (obj.shuffle(z, rev), logdet),
-    #     "invconv": lambda obj, z, logdet, rev: obj.invconv(z, logdet, rev),
-    # }
-
     def __init__(
         self, in_channels, hidden_channels, actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive"
     ):
@@ -395,7 +375,6 @@ class FlowStep(nn.Module):
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
 
-        self.norm_type = "ActNorm2d"
 
         # 1. actnorm
         self.actnorm = ActNorm2d(in_channels, actnorm_scale)
@@ -472,8 +451,8 @@ class _ActNorm(nn.Module):
             return
         assert input.device == self.bias.device, (input.device, self.bias.device)
         with torch.no_grad():
-            bias = thops.mean(input.clone(), dim=[0, 2, 3], keepdim=True) * -1.0
-            vars = thops.mean((input.clone() + bias) ** 2, dim=[0, 2, 3], keepdim=True)
+            bias = thops.mean(input.clone(), dim=[0, 2, 3]) * -1.0
+            vars = thops.mean((input.clone() + bias) ** 2, dim=[0, 2, 3])
             logs = torch.log(self.scale / (torch.sqrt(vars) + 1e-6))
             self.bias.data.copy_(bias.data)
             self.logs.data.copy_(logs.data)
@@ -506,7 +485,7 @@ class _ActNorm(nn.Module):
             logs is log_std of `mean of channels`
             so we need to multiply pixels
             """
-            dlogdet = thops.sum(logs) * thops.pixels(input)
+            dlogdet = torch.sum(logs) * thops.pixels(input)
             if reverse:
                 dlogdet *= -1
             logdet = logdet + dlogdet
@@ -684,14 +663,14 @@ class CondAffineSeparatedAndCond(nn.Module):
 
     def feature_extract(self, z, f):
         h = f(z)
-        shift, scale = thops.split_feature(h, "cross")
+        shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
 
     def feature_extract_aff(self, z1, ft, f):
         z = torch.cat([z1, ft], dim=1)
         h = f(z)
-        shift, scale = thops.split_feature(h, "cross")
+        shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
 

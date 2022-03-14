@@ -48,10 +48,7 @@ def get_model():
     return model, device
 
 
-def model_forward(model, device, rinput_tensor):
-    linput_tensor = torch.log(torch.clamp(rinput_tensor + 1e-3, min=1e-3))
-    input_tensor = torch.cat((linput_tensor, rinput_tensor), dim = 1)
-
+def model_forward(model, device, input_tensor):
     # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)
     if H % LIGHT_ZEROPAD_TIMES != 0 or W % LIGHT_ZEROPAD_TIMES != 0:
