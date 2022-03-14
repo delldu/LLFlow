@@ -50,20 +50,6 @@ def imwrite(path, img):
     cv2.imwrite(path, img[:, :, [2, 1, 0]])
 
 
-# def imCropCenter(img, size):
-#     pdb.set_trace()
-
-#     h, w, c = img.shape
-
-#     h_start = max(h // 2 - size // 2, 0)
-#     h_end = min(h_start + size, h)
-
-#     w_start = max(w // 2 - size // 2, 0)
-#     w_end = min(w_start + size, w)
-
-#     return img[h_start:h_end, w_start:w_end]
-
-
 def impad(img, top=0, bottom=0, left=0, right=0, color=255):
     return np.pad(img, [(top, bottom), (left, right), (0, 0)], 'reflect')
 

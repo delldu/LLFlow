@@ -4,7 +4,6 @@ from torch import nn as nn
 
 from models.modules import thops
 from models.modules.flow import Conv2d, Conv2dZeros
-# from utils.util import opt_get
 import pdb
 
 # xxxx1111
@@ -58,7 +57,7 @@ class CondAffineSeparatedAndCond(nn.Module):
             z2 = z2 * scale
 
             logdet = logdet + self.get_logdet(scale)
-            z = thops.cat_feature(z1, z2)
+            z = torch.cat((z1, z2), dim = 1)
             output = z
         else:
             # ===> Reach here
@@ -70,7 +69,7 @@ class CondAffineSeparatedAndCond(nn.Module):
             # self.asserts(scale, shift, z1, z2)
             z2 = z2 / scale
             z2 = z2 - shift
-            z = thops.cat_feature(z1, z2)
+            z = torch.cat((z1, z2), dim = 1)
             logdet = logdet - self.get_logdet(scale)
 
             # Feature Conditional
@@ -81,12 +80,6 @@ class CondAffineSeparatedAndCond(nn.Module):
 
             output = z
         return output, logdet
-
-    # def asserts(self, scale, shift, z1, z2):
-    #     assert z1.shape[1] == self.channels_for_nn, (z1.shape[1], self.channels_for_nn)
-    #     assert z2.shape[1] == self.channels_for_co, (z2.shape[1], self.channels_for_co)
-    #     assert scale.shape[1] == shift.shape[1], (scale.shape[1], shift.shape[1])
-    #     assert scale.shape[1] == z2.shape[1], (scale.shape[1], z1.shape[1], z2.shape[1])
 
     def get_logdet(self, scale):
         return thops.sum(torch.log(scale), dim=[1, 2, 3])

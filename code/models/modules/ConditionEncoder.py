@@ -53,7 +53,6 @@ class RRDB(nn.Module):
         out = self.RDB3(out)
         return out * 0.2 + x
 
-# xxxx1111
 class ConEncoder1(nn.Module):
     def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=4):
         super(ConEncoder1, self).__init__()

@@ -1,0 +1,1 @@
+4eff84f9d8af6fc83e40fa462c2a282d  image_light.pth
