@@ -185,8 +185,6 @@ class ResidualDenseBlock_5C(nn.Module):
         self.conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=bias)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
-        # initialization
-        # mutil.initialize_weights([self.conv1, self.conv2, self.conv3, self.conv4, self.conv5], 0.1)
         # ==> pdb.set_trace()
         # nf = 32
         # gc = 32
@@ -275,15 +273,10 @@ class ConEncoder1(nn.Module):
                     block_results["block_{}".format(idx)] = fea
         trunk = self.trunk_conv(fea)
         fea_down2 = fea_head + trunk
+        fea_down4 = self.downconv1(F.interpolate(fea_down2, scale_factor=0.5, recompute_scale_factor=True))
 
-        fea_down4 = self.downconv1(
-            F.interpolate(fea_down2, scale_factor=0.5, mode="bilinear", align_corners=False)
-        )
         fea = self.lrelu(fea_down4)
-
-        fea_down8 = self.downconv2(
-            F.interpolate(fea, scale_factor=0.5, mode="bilinear", align_corners=False)
-        )
+        fea_down8 = self.downconv2(F.interpolate(fea, scale_factor=0.5, recompute_scale_factor=True))
 
         results = {
             "fea_up0": fea_down8,
@@ -310,15 +303,9 @@ class ConEncoder1(nn.Module):
 
 
 def squeeze2d(input, factor: int):
-    # assert factor >= 1 and isinstance(factor, int)
     if factor == 1:
         return input
-    size = input.size()
-    B = size[0]
-    C = size[1]
-    H = size[2]
-    W = size[3]
-    # assert H % factor == 0 and W % factor == 0, "{}".format((H, W, factor))
+    B, C, H, W = input.shape
     x = input.view(B, C, H // factor, factor, W // factor, factor)
     x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
     x = x.view(B, C * factor * factor, H // factor, W // factor)
