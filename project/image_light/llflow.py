@@ -433,22 +433,16 @@ class _ActNorm(nn.Module):
             self.logs.data.copy_(logs.data)
             self.inited = True
 
-    def _center(self, input, offset=None, reverse=False):
+    def _center(self, input, reverse=False):
         bias = self.bias
-
-        if offset is not None:
-            bias = bias + offset
 
         if not reverse:
             return input + bias
         else:
             return input - bias
 
-    def _scale(self, input, logdet=None, offset=None, reverse=False):
+    def _scale(self, input, logdet, reverse=False):
         logs = self.logs
-
-        if offset is not None:
-            logs = logs + offset
 
         if not reverse:
             input = input * torch.exp(logs)
@@ -465,24 +459,18 @@ class _ActNorm(nn.Module):
             logdet = logdet + dlogdet
         return input, logdet
 
-    def forward(self, input, logdet=None, offset_mask=None, logs_offset=None, bias_offset=None, reverse=False):
-        print("---- _ActNorm reverse: ", reverse)
-        print("offset_mask -- ", offset_mask, "logs_offset --", logs_offset, "bias_offset --", bias_offset)
-
+    def forward(self, input, logdet=None, reverse=False):
         if not self.inited:
             self.initialize_parameters(input)
         self._check_input_dim(input)
 
-        if offset_mask is not None:
-            logs_offset *= offset_mask
-            bias_offset *= offset_mask
         if not reverse:
             # center and scale
-            input = self._center(input, bias_offset, reverse)
-            input, logdet = self._scale(input, logdet, logs_offset, reverse)
+            input = self._center(input, reverse)
+            input, logdet = self._scale(input, logdet, reverse)
         else:
-            input, logdet = self._scale(input, logdet, logs_offset, reverse)
-            input = self._center(input, bias_offset, reverse)
+            input, logdet = self._scale(input, logdet, reverse)
+            input = self._center(input, reverse)
         return input, logdet
 
 
@@ -642,25 +630,17 @@ class Conv2d(nn.Conv2d):
         kernel_size=[3, 3],
         stride=[1, 1],
         padding="same",
-        do_actnorm=True,
         weight_std=0.05,
     ):
         padding = Conv2d.get_padding(padding, kernel_size, stride)
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, bias=(not do_actnorm))
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, bias=False)
         # init weight with std
         self.weight.data.normal_(mean=0.0, std=weight_std)
-        if not do_actnorm:
-            self.bias.data.zero_()
-        else:
-            self.actnorm = ActNorm2d(out_channels)
-        self.do_actnorm = do_actnorm
-        # do_actnorm = True
-        print("---- do_actnorm: ", do_actnorm)
+        self.actnorm = ActNorm2d(out_channels)
 
     def forward(self, input):
         x = super().forward(input)
-        if self.do_actnorm:
-            x, _ = self.actnorm(x)
+        x, _ = self.actnorm(x)
         return x
 
 
@@ -668,10 +648,8 @@ class Conv2dZeros(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding="same", logscale_factor=3):
         padding = Conv2d.get_padding(padding, kernel_size, stride)
         super().__init__(in_channels, out_channels, kernel_size, stride, padding)
-        # logscale_factor
         self.logscale_factor = logscale_factor
         self.register_parameter("logs", nn.Parameter(torch.zeros(out_channels, 1, 1)))
-        # init
         self.weight.data.zero_()
         self.bias.data.zero_()
 
