@@ -165,11 +165,11 @@ class FlowUpsamplerNet(nn.Module):
         for layer, shape in zip(reversed(self.layers), reversed(self.output_shapes)):
             size = shape[2]
             level = int(np.log(self.hr_size / size) / np.log(2))
-            # FlowStep.FlowStep, flow.SqueezeLayer
+            # FlowStep, SqueezeLayer
             if isinstance(layer, FlowStep):
                 fl_fea, logdet = layer(fl_fea, logdet=logdet, rrdbResults=level_conditionals[level])
             else:
-                fl_fea, logdet = layer(fl_fea, logdet=logdet, reverse=True)
+                fl_fea, logdet = layer(fl_fea, logdet=logdet) # SqueezeLayer
 
         sr = fl_fea
         assert sr.shape[1] == 3
@@ -337,11 +337,7 @@ def make_layer(block, n_layers):
 def unsqueeze2d(input, factor: int):
     if factor == 1:
         return input
-    size = input.size()
-    B = size[0]
-    C = size[1]
-    H = size[2]
-    W = size[3]
+    B, C, H, W = input.shape
     x = input.view(B, C // (factor * factor), factor, factor, H, W)
     x = x.permute(0, 1, 4, 2, 5, 3).contiguous()
     x = x.view(B, C // (factor * factor), H * factor, W * factor)
@@ -353,15 +349,9 @@ class SqueezeLayer(nn.Module):
         super().__init__()
         self.factor = factor
 
-    def forward(self, input, logdet, reverse:bool=False) -> List[torch.Tensor]:
-        print("SqueezeLayer reverse: ", reverse)
-
-        if not reverse:
-            output = squeeze2d(input, self.factor)  # Squeeze in forward
-            return output, logdet
-        else:
-            output = unsqueeze2d(input, self.factor)
-            return output, logdet
+    def forward(self, input, logdet) -> List[torch.Tensor]:
+        output = unsqueeze2d(input, self.factor)
+        return output, logdet
 
 
 class FlowStep(nn.Module):
