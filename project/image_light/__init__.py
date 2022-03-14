@@ -18,9 +18,7 @@ import torch
 
 import redos
 import todos
-
 from . import llflow
-from einops import rearrange
 
 import pdb
 
@@ -50,12 +48,16 @@ def get_model():
     return model, device
 
 
-def model_forward(model, device, input_tensor):
+def model_forward(model, device, rinput_tensor):
+    linput_tensor = torch.log(torch.clamp(rinput_tensor + 1e-3, min=1e-3))
+    input_tensor = torch.cat((linput_tensor, rinput_tensor), dim = 1)
+
     # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)
     if H % LIGHT_ZEROPAD_TIMES != 0 or W % LIGHT_ZEROPAD_TIMES != 0:
         input_tensor = todos.data.zeropad_tensor(input_tensor, times=LIGHT_ZEROPAD_TIMES)
     output_tensor = todos.model.forward(model, device, input_tensor)
+
     return output_tensor[:, :, 0:H, 0:W]
 
 

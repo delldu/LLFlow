@@ -15,6 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import functools
 import numpy as np
+from . import thops
 
 import pdb
 
@@ -29,7 +30,9 @@ class LLFlow(nn.Module):
         )
         self.max_pool = nn.MaxPool2d(3)
 
-    def forward(self, lr, eps_std):
+    def forward(self, lr):
+        eps_std = 1.0
+
         # lr.size()-- [1, 6, 400, 600]
         # z.size() -- [1, 192, 50, 75]
 
@@ -42,7 +45,9 @@ class LLFlow(nn.Module):
         lr_enc = self.rrdbPreprocessing(lr)
         z = squeeze2d(lr_enc["color_map"], 8)
         x, logdet = self.flowUpsamplerNet(rrdbResults=lr_enc, z=z, eps_std=eps_std, logdet=logdet)
-        return x, logdet
+
+        # return x, logdet
+        return x.clamp(0.0, 1.0)
 
     def rrdbPreprocessing(self, lr):
         rrdbResults = self.RRDB(lr)
