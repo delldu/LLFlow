@@ -101,7 +101,8 @@ def main():
 
         lr = imread(lr_path)
         hr = imread(hr_path)
-        his = hiseq_color_cv2_img(lr)
+        # his = hiseq_color_cv2_img(lr)
+        his = lr.copy() # xxxx9999
         his = t(his)
 
         # (Pdb) lr.shape-- (400, 600, 3)
