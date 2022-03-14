@@ -75,7 +75,7 @@ class LLFlow(nn.Module):
 
 class FlowUpsamplerNet(nn.Module):
     def __init__(
-        self, image_shape, hidden_channels, K, L=None, actnorm_scale=1.0, flow_permutation=None, flow_coupling="affine"
+        self, image_shape, hidden_channels, K, L=None, flow_permutation=None, flow_coupling="affine"
     ):
 
         super().__init__()
@@ -108,35 +108,33 @@ class FlowUpsamplerNet(nn.Module):
             H, W = self.arch_squeeze(H, W)
 
             # 2. K FlowStep
-            self.arch_additionalFlowAffine(H, W, actnorm_scale, hidden_channels)
+            self.arch_additionalFlowAffine(H, W, hidden_channels)
             self.arch_FlowStep(
-                H, self.K[level], W, actnorm_scale, affineInCh, flow_coupling, flow_permutation, hidden_channels
+                H, self.K[level], W, affineInCh, flow_coupling, flow_permutation, hidden_channels
             )
 
         self.f = f_conv2d_bias(affineInCh, 2 * 3 * 64)
 
-    def arch_FlowStep(self, H, K, W, actnorm_scale, affineInCh, flow_coupling, flow_permutation, hidden_channels):
+    def arch_FlowStep(self, H, K, W, affineInCh, flow_coupling, flow_permutation, hidden_channels):
 
         for k in range(K):
             self.layers.append(
                 FlowStep(
                     in_channels=self.C,
                     hidden_channels=hidden_channels,
-                    actnorm_scale=actnorm_scale,
                     flow_permutation=flow_permutation,
                     flow_coupling=flow_coupling,
                 )
             )
             self.output_shapes.append([-1, self.C, H, W])
 
-    def arch_additionalFlowAffine(self, H, W, actnorm_scale, hidden_channels):
+    def arch_additionalFlowAffine(self, H, W, hidden_channels):
         n_additionalFlowNoAffine = 2  # int(opt['network_G']['flow']['additionalFlowNoAffine'])
         for _ in range(n_additionalFlowNoAffine):
             self.layers.append(
                 FlowStep(
                     in_channels=self.C,
                     hidden_channels=hidden_channels,
-                    actnorm_scale=actnorm_scale,
                     flow_permutation="invconv",
                     flow_coupling="noCoupling",
                 )
@@ -356,14 +354,14 @@ class SqueezeLayer(nn.Module):
 
 class FlowStep(nn.Module):
     def __init__(
-        self, in_channels, hidden_channels, actnorm_scale=1.0, flow_permutation="invconv", flow_coupling="additive"
+        self, in_channels, hidden_channels, flow_permutation="invconv", flow_coupling="additive"
     ):
         super().__init__()
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
 
         # 1. actnorm
-        self.actnorm = ActNorm2d(in_channels, actnorm_scale)
+        self.actnorm = ActNorm2d(in_channels)
 
         # 2. permute
         self.invconv = InvertibleConv1x1(in_channels)
@@ -395,7 +393,7 @@ class FlowStep(nn.Module):
         return z, logdet
 
 
-class _ActNorm(nn.Module):
+class ActNorm2d(nn.Module):
     """
     Activation Normalization
     Initialize the bias and scale with a given minibatch,
@@ -404,36 +402,14 @@ class _ActNorm(nn.Module):
     After initialization, `bias` and `logs` will be trained as parameters.
     """
 
-    def __init__(self, num_features, scale=1.0):
+    def __init__(self, num_features):
         super().__init__()
-        # register mean and scale
         size = [1, num_features, 1, 1]
         self.register_parameter("bias", nn.Parameter(torch.zeros(*size)))
         self.register_parameter("logs", nn.Parameter(torch.zeros(*size)))
-        self.num_features = num_features
-        self.scale = float(scale)
-        self.inited = False
 
-    def _check_input_dim(self, input):
-        return NotImplemented
 
-    def initialize_parameters(self, input):
-        self._check_input_dim(input)
-        if not self.training:
-            return
-        if (self.bias != 0).any():
-            self.inited = True
-            return
-        assert input.device == self.bias.device, (input.device, self.bias.device)
-        with torch.no_grad():
-            bias = thops.mean(input.clone(), dim=[0, 2, 3]) * -1.0
-            vars = thops.mean((input.clone() + bias) ** 2, dim=[0, 2, 3])
-            logs = torch.log(self.scale / (torch.sqrt(vars) + 1e-6))
-            self.bias.data.copy_(bias.data)
-            self.logs.data.copy_(logs.data)
-            self.inited = True
-
-    def _center(self, input, reverse=False):
+    def _center(self, input, reverse: bool =False):
         bias = self.bias
 
         if not reverse:
@@ -441,7 +417,7 @@ class _ActNorm(nn.Module):
         else:
             return input - bias
 
-    def _scale(self, input, logdet, reverse=False):
+    def _scale(self, input, logdet, reverse:bool =False):
         logs = self.logs
 
         if not reverse:
@@ -459,11 +435,7 @@ class _ActNorm(nn.Module):
             logdet = logdet + dlogdet
         return input, logdet
 
-    def forward(self, input, logdet=None, reverse=False):
-        if not self.inited:
-            self.initialize_parameters(input)
-        self._check_input_dim(input)
-
+    def forward(self, input, logdet=None, reverse:bool =False):
         if not reverse:
             # center and scale
             input = self._center(input, reverse)
@@ -472,19 +444,6 @@ class _ActNorm(nn.Module):
             input, logdet = self._scale(input, logdet, reverse)
             input = self._center(input, reverse)
         return input, logdet
-
-
-class ActNorm2d(_ActNorm):
-    def __init__(self, num_features, scale=1.0):
-        super().__init__(num_features, scale)
-
-    def _check_input_dim(self, input):
-        assert len(input.size()) == 4
-        assert (
-            input.size(1) == self.num_features
-        ), "[ActNorm]: input should be in shape as `BCHW`," " channels should be {} rather than {}".format(
-            self.num_features, input.size()
-        )
 
 
 class InvertibleConv1x1(nn.Module):
