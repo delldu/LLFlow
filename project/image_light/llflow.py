@@ -32,9 +32,7 @@ class LLFlow(nn.Module):
         super(LLFlow, self).__init__()
         self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc, scale)
         hidden_channels = 64
-        self.flowUpsamplerNet = FlowUpsamplerNet(
-            (160, 160, 3), hidden_channels, K, flow_coupling="CondAffineSeparatedAndCond"
-        )
+        self.flowUpsamplerNet = FlowUpsamplerNet((160, 160, 3), hidden_channels, K)
         self.max_pool = nn.MaxPool2d(3)
 
     def forward(self, x):
@@ -79,13 +77,13 @@ class LLFlow(nn.Module):
 
 
 class FlowUpsamplerNet(nn.Module):
-    def __init__(self, image_shape, hidden_channels, K, L=None, flow_permutation=None, flow_coupling="affine"):
+    def __init__(self, image_shape, hidden_channels, K):
 
         super().__init__()
 
         self.hr_size = 160  # opt['datasets']['train']['GT_size']
         self.layers = nn.ModuleList()
-        self.output_shapes: List[int, int, int, int] = []
+        self.output_shapes: List[int] = []
 
         self.L = 3  # opt_get(opt, ['network_G', 'flow', 'L']) # 3
         self.K = 4  # opt_get(opt, ['network_G', 'flow', 'K']) # 4
@@ -103,33 +101,34 @@ class FlowUpsamplerNet(nn.Module):
         }
 
         affineInCh = 128  # self.get_affineInCh(opt_get) # 128
-        flow_permutation = "invconv"  # self.get_flow_permutation(flow_permutation, opt) # 'invconv'
 
         # Upsampler
         for level in range(1, self.L + 1):
             # 1. Squeeze
-            H, W = self.arch_squeeze(H, W)
+            H, W = self.arch_Squeeze(H, W)
 
             # 2. K FlowStep
-            self.arch_additionalFlowAffine(H, W, hidden_channels)
-            self.arch_FlowStep(H, self.K[level], W, affineInCh, flow_coupling, flow_permutation, hidden_channels)
+            self.arch_FlowAffine(H, hidden_channels)
+            self.arch_FlowStep(H, self.K[level], hidden_channels)
 
         self.f = f_conv2d_bias(affineInCh, 2 * 3 * 64)
 
-    def arch_FlowStep(self, H, K, W, affineInCh, flow_coupling, flow_permutation, hidden_channels):
+        # self.output_shapes = reversed(self.output_shapes)
+
+    def arch_FlowStep(self, H, K, hidden_channels):
 
         for k in range(K):
             self.layers.append(
                 FlowStep(
                     in_channels=self.C,
                     hidden_channels=hidden_channels,
-                    flow_permutation=flow_permutation,
-                    flow_coupling=flow_coupling,
+                    flow_permutation="invconv",
+                    flow_coupling="CondAffineSeparatedAndCond",
                 )
             )
-            self.output_shapes.append([-1, self.C, H, W])
+            self.output_shapes.append(H)
 
-    def arch_additionalFlowAffine(self, H, W, hidden_channels):
+    def arch_FlowAffine(self, H, hidden_channels):
         n_additionalFlowNoAffine = 2  # int(opt['network_G']['flow']['additionalFlowNoAffine'])
         for _ in range(n_additionalFlowNoAffine):
             self.layers.append(
@@ -140,12 +139,12 @@ class FlowUpsamplerNet(nn.Module):
                     flow_coupling="noCoupling",
                 )
             )
-            self.output_shapes.append([-1, self.C, H, W])
+            self.output_shapes.append(H)
 
-    def arch_squeeze(self, H, W):
+    def arch_Squeeze(self, H, W):
         self.C, H, W = self.C * 4, H // 2, W // 2
         self.layers.append(SqueezeLayer(factor=2))
-        self.output_shapes.append([-1, self.C, H, W])
+        self.output_shapes.append(H)
         return H, W
 
     def forward(self, rrdbResults: Dict[str, torch.Tensor], z, logdet, eps_std: float):
@@ -154,24 +153,25 @@ class FlowUpsamplerNet(nn.Module):
         for level in range(self.L + 1):
             if level not in self.levelToName.keys():
                 print("CheckPoint 1 ...")
-                level_conditionals[level] = torch.randn(1,3, 8, 8) # None
+                level_conditionals[level] = torch.randn(1,3, 8, 8) # None, Fake for torchscript compile
             else:
                 print("CheckPoint 2 ...", rrdbResults is None)
 
                 # level_conditionals[level] = rrdbResults[self.levelToName[level]] if rrdbResults else None
                 level_conditionals[level] = rrdbResults[self.levelToName[level]]
 
-        for layer, shape in zip(reversed(self.layers), reversed(self.output_shapes)):
-            size = shape[2]
+        for layer, size in zip(reversed(self.layers), reversed(self.output_shapes)):
             level = int(math.log(self.hr_size / size) / math.log(2))
             # FlowStep, SqueezeLayer
             if isinstance(layer, FlowStep):
                 fl_fea, logdet = layer(fl_fea, logdet=logdet, rrdbResults=level_conditionals[level])
             else:
                 fl_fea, logdet = layer(fl_fea, logdet=logdet)  # SqueezeLayer
-        # # xxxx8888
-        # for layer in self.layers:
-        #     level = int(math.log(self.hr_size) / math.log(2))
+        # # # xxxx8888
+        # # for layer in self.layers:
+        # #     level = int(math.log(self.hr_size) / math.log(2))
+        # for shape in self.output_shapes:
+        #     print(shape)
 
         sr = fl_fea
         # assert sr.shape[1] == 3
@@ -630,16 +630,16 @@ class Conv2d(nn.Conv2d):
 
 
 class Conv2dZeros(nn.Conv2d):
-    def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding="same", logscale_factor=3):
+    def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding="same"):
         padding = Conv2d.get_padding(padding, kernel_size, stride)
         super().__init__(in_channels, out_channels, kernel_size, stride, padding)
-        self.logscale_factor = logscale_factor
+        self.logscale_factor = 3.0
         self.register_parameter("logs", nn.Parameter(torch.zeros(out_channels, 1, 1)))
         self.weight.data.zero_()
         self.bias.data.zero_()
 
     def more_forward(self, input):
-        output = super().forward(input)
+        output = self.forward(input)
         return output * torch.exp(self.logs * self.logscale_factor)
 
 
