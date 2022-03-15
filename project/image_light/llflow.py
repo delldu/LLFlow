@@ -41,11 +41,11 @@ class LLFlow(nn.Module):
         log_lr = torch.log(torch.clamp(x + 1e-3, min=1e-3))
         x255 = x * 255.0
         heq_lr = TF.equalize(x255.to(torch.uint8)).float() / 255.0
-        lr = torch.cat((log_lr, heq_lr), dim=1)
+        lr = torch.cat((log_lr, 0.5*heq_lr.clamp(0, 1.0) + 0.5*x), dim=1)
         # lr.size()-- [1, 6, 400, 600]
 
         # make noise tensor
-        eps_std = 0.5
+        eps_std = 0.1
         B, C, H, W = lr.shape
         size = (B, 3 * 8 * 8, H // 8, W // 8)
         z = torch.normal(mean=0.0, std=eps_std, size=size)
@@ -149,7 +149,6 @@ class FlowUpsamplerNet(nn.Module):
         return H, W
 
     def forward(self, rrdbResults: Dict[str, torch.Tensor], z, logdet, eps_std: float):
-        # print("rrdbResults type: ", type(rrdbResults))
         fl_fea = z
         level_conditionals: Dict[int, torch.Tensor] = {}
         for level in range(self.L + 1):
@@ -522,7 +521,6 @@ class CondAffineSeparatedAndCond(nn.Module):
 
 
     def forward(self, input, logdet, rrdbResults) -> List[torch.Tensor]:
-        # xxxx9999
         z = input
 
         # Self Conditional
@@ -546,20 +544,11 @@ class CondAffineSeparatedAndCond(nn.Module):
         return thops.sum(torch.log(scale), dim=[1, 2, 3])
 
     def feature_extract(self, z) -> List[torch.Tensor]:
-        # xxxx9999
-        h = z
         # h = self.fFeatures(z)
+        h = z
         for layer in self.fFeatures:
-            if isinstance(layer, Conv2dZeros):
-                # print("feature_extract Conv2dZeros ...")
+            if isinstance(layer, (Conv2d, Conv2dZeros)):
                 h = layer.more_forward(h)
-                # h *= torch.exp(layer.logs * layer.logscale_factor)
-            elif isinstance(layer, Conv2d):
-                # print("feature_extract Conv2d ...")
-                h = layer.more_forward(h)
-
-                # + layer.actnorm.bias
-                #h = h * torch.exp(layer.actnorm.logs)
             else:
                 h = layer(h)            
 
@@ -568,26 +557,16 @@ class CondAffineSeparatedAndCond(nn.Module):
         return scale, shift
 
     def feature_extract_aff(self, z1, ft) -> List[torch.Tensor]:
-        # xxxx9999
         z = torch.cat([z1, ft], dim=1)
 
+        # h = self.fAffine(z)
         h = z
         for layer in self.fAffine:
-            if isinstance(layer, Conv2dZeros):
-                # print("feature_extract_aff Conv2dZeros ...")
+            if isinstance(layer, (Conv2d, Conv2dZeros)):
                 h = layer.more_forward(h)
-                # h *= torch.exp(layer.logs * layer.logscale_factor)
-            elif isinstance(layer, Conv2d):
-                # print("feature_extract_aff Conv2d ...")
-                h = layer.more_forward(h)
-                # + layer.actnorm.bias
-                # h = h * torch.exp(layer.actnorm.logs)
             else:
                 h = layer(h)
 
-            # print("layer type:", type(layer))
-
-        # h = self.fAffine(z)
         shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
         return scale, shift
@@ -598,8 +577,8 @@ class CondAffineSeparatedAndCond(nn.Module):
         return z1, z2
 
     def F(self, in_channels, out_channels, hidden_channels=64, kernel_hidden=1, n_hidden_layers=1):
+        # xxxx8888
         layers = [Conv2d(in_channels, hidden_channels), nn.ReLU(inplace=False)]
-
         for _ in range(n_hidden_layers):
             layers.append(Conv2d(hidden_channels, hidden_channels, kernel_size=[kernel_hidden, kernel_hidden]))
             layers.append(nn.ReLU(inplace=False))
