@@ -39,9 +39,9 @@ def get_model():
     model = model.to(device)
     model.eval()
 
-    model = torch.jit.script(model)
+    # model = torch.jit.script(model)
 
-    # todos.data.mkdir("output")
+    # # todos.data.mkdir("output")
     # if not os.path.exists("output/image_light.torch"):
     #     model.save("output/image_light.torch")
 
