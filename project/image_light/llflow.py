@@ -50,9 +50,10 @@ class LLFlow(nn.Module):
         # z.size() -- [1, 192, 50, 75]
 
         logdet = torch.zeros_like(lr[:, 0, 0, 0])
-        lr_enc = self.rrdbPreprocessing(lr)
-        z = squeeze2d(lr_enc["color_map"], 8)
-        x, logdet = self.flowUpsamplerNet(rrdbResults=lr_enc, z=z, eps_std=eps_std, logdet=logdet)
+        
+        rrdbResults = self.rrdbPreprocessing(lr)
+        z = squeeze2d(rrdbResults["color_map"], 8)
+        x, logdet = self.flowUpsamplerNet(rrdbResults, z, logdet, eps_std)
 
         # return x, logdet
         return x.clamp(0.0, 1.0)
@@ -82,7 +83,7 @@ class FlowUpsamplerNet(nn.Module):
         super().__init__()
 
         self.hr_size = 160  # opt['datasets']['train']['GT_size']
-        self.layers = nn.ModuleList()
+        self.layer_list = [] # nn.ModuleList() # xxxx8888
         self.output_shapes: List[int] = []
 
         self.L = 3  # opt_get(opt, ['network_G', 'flow', 'L']) # 3
@@ -100,9 +101,8 @@ class FlowUpsamplerNet(nn.Module):
             # 4: 'fea_up-1'
         }
 
-        affineInCh = 128  # self.get_affineInCh(opt_get) # 128
-
-        # Upsampler
+        # Upsampler        
+        # self.C, H, W -- (3, 160, 160)
         for level in range(1, self.L + 1):
             # 1. Squeeze
             H, W = self.arch_Squeeze(H, W)
@@ -110,15 +110,16 @@ class FlowUpsamplerNet(nn.Module):
             # 2. K FlowStep
             self.arch_FlowAffine(H, hidden_channels)
             self.arch_FlowStep(H, self.K[level], hidden_channels)
+        # self.C, H, W -- (192, 20, 20)
 
-        self.f = f_conv2d_bias(affineInCh, 2 * 3 * 64)
+        self.layers = nn.Sequential(*self.layer_list)
 
-        # self.output_shapes = reversed(self.output_shapes)
+        self.f = f_conv2d_bias(128, 2 * 3 * 64) # 128 -- self.get_affineInCh(opt_get)
+
 
     def arch_FlowStep(self, H, K, hidden_channels):
-
         for k in range(K):
-            self.layers.append(
+            self.layer_list.append(
                 FlowStep(
                     in_channels=self.C,
                     hidden_channels=hidden_channels,
@@ -131,7 +132,7 @@ class FlowUpsamplerNet(nn.Module):
     def arch_FlowAffine(self, H, hidden_channels):
         n_additionalFlowNoAffine = 2  # int(opt['network_G']['flow']['additionalFlowNoAffine'])
         for _ in range(n_additionalFlowNoAffine):
-            self.layers.append(
+            self.layer_list.append(
                 FlowStep(
                     in_channels=self.C,
                     hidden_channels=hidden_channels,
@@ -139,39 +140,47 @@ class FlowUpsamplerNet(nn.Module):
                     flow_coupling="noCoupling",
                 )
             )
+
             self.output_shapes.append(H)
 
     def arch_Squeeze(self, H, W):
         self.C, H, W = self.C * 4, H // 2, W // 2
-        self.layers.append(SqueezeLayer(factor=2))
+        self.layer_list.append(SqueezeLayer(factor=2))
         self.output_shapes.append(H)
         return H, W
 
     def forward(self, rrdbResults: Dict[str, torch.Tensor], z, logdet, eps_std: float):
         fl_fea = z
+
         level_conditionals: Dict[int, torch.Tensor] = {}
         for level in range(self.L + 1):
             if level not in self.levelToName.keys():
-                print("CheckPoint 1 ...")
                 level_conditionals[level] = torch.randn(1,3, 8, 8) # None, Fake for torchscript compile
             else:
-                print("CheckPoint 2 ...", rrdbResults is None)
-
                 # level_conditionals[level] = rrdbResults[self.levelToName[level]] if rrdbResults else None
                 level_conditionals[level] = rrdbResults[self.levelToName[level]]
 
-        for layer, size in zip(reversed(self.layers), reversed(self.output_shapes)):
+        # for layer, size in zip(reversed(self.layers), reversed(self.output_shapes)):
+        #     level = int(math.log(self.hr_size / size) / math.log(2))
+        #     # FlowStep, SqueezeLayer
+        #     if isinstance(layer, FlowStep):
+        #         fl_fea, logdet = layer(fl_fea, logdet=logdet, rrdbResults=level_conditionals[level])
+        #     else:
+        #         fl_fea, logdet = layer(fl_fea, logdet=logdet)  # SqueezeLayer
+
+        length = len(self.layers)
+        for index in range(length):
+            layer = self.layers[length - 1 - index]
+            size = self.output_shapes[length - 1 - index]
+
             level = int(math.log(self.hr_size / size) / math.log(2))
             # FlowStep, SqueezeLayer
             if isinstance(layer, FlowStep):
-                fl_fea, logdet = layer(fl_fea, logdet=logdet, rrdbResults=level_conditionals[level])
+                fl_fea, logdet = layer(fl_fea, logdet, rrdbResults=level_conditionals[level])
+            elif isinstance(layer, SqueezeLayer):
+                fl_fea, logdet = layer(fl_fea, logdet)  # SqueezeLayer
             else:
-                fl_fea, logdet = layer(fl_fea, logdet=logdet)  # SqueezeLayer
-        # # # xxxx8888
-        # # for layer in self.layers:
-        # #     level = int(math.log(self.hr_size) / math.log(2))
-        # for shape in self.output_shapes:
-        #     print(shape)
+                pass
 
         sr = fl_fea
         # assert sr.shape[1] == 3
@@ -379,7 +388,7 @@ class FlowStep(nn.Module):
         z, logdet = self.invconv(z, logdet)
 
         # 3. actnorm
-        z, logdet = self.actnorm(z, logdet=logdet, reverse=True)
+        z, logdet = self.actnorm(z, logdet, reverse=True)
 
         return z, logdet
 
@@ -406,21 +415,23 @@ class ActNorm2d(nn.Module):
             return input - self.bias
 
     def _scale(self, input, logdet, reverse: bool = False) -> List[torch.Tensor]:
+        '''logdet is not None'''
+
         logs = self.logs
 
         if not reverse:
             input = input * torch.exp(logs)
         else:
             input = input * torch.exp(-logs)
-        if logdet is not None:
-            """
-            logs is log_std of `mean of channels`
-            so we need to multiply pixels
-            """
-            dlogdet = torch.sum(logs) * thops.pixels(input)
-            if reverse:
-                dlogdet *= -1
-            logdet = logdet + dlogdet
+
+        """
+        logs is log_std of `mean of channels`
+        so we need to multiply pixels
+        """
+        dlogdet = torch.sum(logs) * thops.pixels(input)
+        if reverse:
+            dlogdet *= -1
+        logdet = logdet + dlogdet
         return input, logdet
 
     def forward(self, input, logdet, reverse: bool = False) -> List[torch.Tensor]:
@@ -625,7 +636,7 @@ class Conv2d(nn.Conv2d):
 
     def more_forward(self, input):
         x = self.forward(input)
-        x = self.actnorm.less_forward(x)
+        x = self.actnorm.less_forward(x)  # less is more ...
         return x
 
 
@@ -640,7 +651,7 @@ class Conv2dZeros(nn.Conv2d):
 
     def more_forward(self, input):
         output = self.forward(input)
-        return output * torch.exp(self.logs * self.logscale_factor)
+        return output * torch.exp(self.logs * self.logscale_factor) # more ...
 
 
 def f_conv2d_bias(in_channels, out_channels):
