@@ -18,7 +18,7 @@ def mean(tensor, dim: List[int]):
     return tensor
 
 
-def split_cross(tensor)->List[torch.Tensor]:
+def split_cross(tensor) -> List[torch.Tensor]:
     return tensor[:, 0::2, ...], tensor[:, 1::2, ...]
 
 

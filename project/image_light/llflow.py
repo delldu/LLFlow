@@ -39,7 +39,7 @@ class LLFlow(nn.Module):
         log_lr = torch.log(torch.clamp(x + 1e-3, min=1e-3))
         x255 = x * 255.0
         heq_lr = TF.equalize(x255.to(torch.uint8)).float() / 255.0
-        lr = torch.cat((log_lr, 0.5*heq_lr.clamp(0, 1.0) + 0.5*x), dim=1)
+        lr = torch.cat((log_lr, 0.5 * heq_lr.clamp(0, 1.0) + 0.5 * x), dim=1)
         # lr.size()-- [1, 6, 400, 600]
 
         # make noise tensor
@@ -50,7 +50,7 @@ class LLFlow(nn.Module):
         # z.size() -- [1, 192, 50, 75]
 
         logdet = torch.zeros_like(lr[:, 0, 0, 0])
-        
+
         rrdbResults = self.rrdbPreprocessing(lr)
         z = squeeze2d(rrdbResults["color_map"], 8)
         x, logdet = self.flowUpsamplerNet(rrdbResults, z, logdet, eps_std)
@@ -58,7 +58,7 @@ class LLFlow(nn.Module):
         # return x, logdet
         return x.clamp(0.0, 1.0)
 
-    def rrdbPreprocessing(self, lr)->Dict[str, torch.Tensor]:
+    def rrdbPreprocessing(self, lr) -> Dict[str, torch.Tensor]:
         rrdbResults = self.RRDB(lr)
 
         block_idxs = [1]  # opt_get(self.opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) or []
@@ -79,11 +79,10 @@ class LLFlow(nn.Module):
 
 class FlowUpsamplerNet(nn.Module):
     def __init__(self, image_shape, hidden_channels, K):
-
-        super().__init__()
+        super(FlowUpsamplerNet, self).__init__()
 
         self.hr_size = 160  # opt['datasets']['train']['GT_size']
-        self.layer_list = [] # nn.ModuleList() # xxxx8888
+        self.layer_list = []  # nn.ModuleList() # xxxx8888
         self.output_shapes: List[int] = []
 
         self.L = 3  # opt_get(opt, ['network_G', 'flow', 'L']) # 3
@@ -101,7 +100,7 @@ class FlowUpsamplerNet(nn.Module):
             # 4: 'fea_up-1'
         }
 
-        # Upsampler        
+        # Upsampler
         # self.C, H, W -- (3, 160, 160)
         for level in range(1, self.L + 1):
             # 1. Squeeze
@@ -114,8 +113,7 @@ class FlowUpsamplerNet(nn.Module):
 
         self.layers = nn.Sequential(*self.layer_list)
 
-        self.f = f_conv2d_bias(128, 2 * 3 * 64) # 128 -- self.get_affineInCh(opt_get)
-
+        self.f = f_conv2d_bias(128, 2 * 3 * 64)  # 128 -- self.get_affineInCh(opt_get)
 
     def arch_FlowStep(self, H, K, hidden_channels):
         for k in range(K):
@@ -155,7 +153,7 @@ class FlowUpsamplerNet(nn.Module):
         level_conditionals: Dict[int, torch.Tensor] = {}
         for level in range(self.L + 1):
             if level not in self.levelToName.keys():
-                level_conditionals[level] = torch.randn(1,3, 8, 8) # None, Fake for torchscript compile
+                level_conditionals[level] = torch.randn(1, 3, 8, 8)  # None, Fake for torchscript compile
             else:
                 # level_conditionals[level] = rrdbResults[self.levelToName[level]] if rrdbResults else None
                 level_conditionals[level] = rrdbResults[self.levelToName[level]]
@@ -174,13 +172,12 @@ class FlowUpsamplerNet(nn.Module):
             size = self.output_shapes[length - 1 - index]
 
             level = int(math.log(self.hr_size / size) / math.log(2))
+
             # FlowStep, SqueezeLayer
             if isinstance(layer, FlowStep):
-                fl_fea, logdet = layer(fl_fea, logdet, rrdbResults=level_conditionals[level])
-            elif isinstance(layer, SqueezeLayer):
-                fl_fea, logdet = layer(fl_fea, logdet)  # SqueezeLayer
-            else:
-                pass
+                fl_fea, logdet = layer(fl_fea, logdet, level_conditionals[level])
+            else:  # isinstance(layer, SqueezeLayer):
+                fl_fea = layer(fl_fea)  # SqueezeLayer
 
         sr = fl_fea
         # assert sr.shape[1] == 3
@@ -344,17 +341,17 @@ def unsqueeze2d(input, factor: int):
 
 class SqueezeLayer(nn.Module):
     def __init__(self, factor):
-        super().__init__()
+        super(SqueezeLayer, self).__init__()
         self.factor = factor
 
-    def forward(self, input, logdet) -> List[torch.Tensor]:
+    def forward(self, input):
         output = unsqueeze2d(input, self.factor)
-        return output, logdet
+        return output
 
 
 class FlowStep(nn.Module):
     def __init__(self, in_channels, hidden_channels, flow_permutation="invconv", flow_coupling="additive"):
-        super().__init__()
+        super(FlowStep, self).__init__()
         self.flow_permutation = flow_permutation
         self.flow_coupling = flow_coupling
 
@@ -365,30 +362,23 @@ class FlowStep(nn.Module):
         self.invconv = InvertibleConv1x1(in_channels)
 
         # 3. coupling
-        self.need_features = False
         if flow_coupling == "CondAffineSeparatedAndCond":
             self.affine = CondAffineSeparatedAndCond(in_channels=in_channels)
-            self.need_features = self.affine.need_features
-        # elif flow_coupling == "noCoupling":
-        #     self.affine = FakeAffineSeparatedAndCond(in_channels=in_channels)
-        # else:
-        #     raise RuntimeError("coupling not Found:", flow_coupling)
         else:
             self.affine = FakeAffineSeparatedAndCond(in_channels=in_channels)
 
-    def forward(self, input, logdet, rrdbResults) -> List[torch.Tensor]:        
-        return self.reverse_flow(input, logdet, rrdbResults)
+    def forward(self, input, logdet, rrdb) -> List[torch.Tensor]:
+        return self.reverse_flow(input, logdet, rrdb)
 
-    def reverse_flow(self, z, logdet, rrdbResults) -> List[torch.Tensor]:
+    def reverse_flow(self, z, logdet, rrdb) -> List[torch.Tensor]:
         # 1.coupling
-        if self.need_features or self.flow_coupling in ["condAffine", "condFtAffine", "condNormAffine"]:
-            z, logdet = self.affine(z, logdet, rrdbResults)
+        z, logdet = self.affine(z, logdet, rrdb)
 
         # 2. permute
         z, logdet = self.invconv(z, logdet)
 
         # 3. actnorm
-        z, logdet = self.actnorm(z, logdet, reverse=True)
+        z, logdet = self.actnorm(z, logdet, True)  # reverse=True
 
         return z, logdet
 
@@ -403,7 +393,7 @@ class ActNorm2d(nn.Module):
     """
 
     def __init__(self, num_features):
-        super().__init__()
+        super(ActNorm2d, self).__init__()
         size = [1, num_features, 1, 1]
         self.register_parameter("bias", nn.Parameter(torch.zeros(*size)))
         self.register_parameter("logs", nn.Parameter(torch.zeros(*size)))
@@ -415,7 +405,7 @@ class ActNorm2d(nn.Module):
             return input - self.bias
 
     def _scale(self, input, logdet, reverse: bool = False) -> List[torch.Tensor]:
-        '''logdet is not None'''
+        """logdet is not None"""
 
         logs = self.logs
 
@@ -444,9 +434,8 @@ class ActNorm2d(nn.Module):
             input = self._center(input, reverse)
         return input, logdet
 
-
     def less_scale(self, input, reverse: bool = False):
-        '''logdet is None'''
+        """logdet is None"""
 
         logs = self.logs
 
@@ -456,9 +445,8 @@ class ActNorm2d(nn.Module):
             input = input * torch.exp(-logs)
         return input
 
-
     def less_forward(self, input, reverse: bool = False):
-        '''logdet is None'''
+        """logdet is None"""
         if not reverse:
             # center and scale
             input = self._center(input, reverse)
@@ -471,7 +459,7 @@ class ActNorm2d(nn.Module):
 
 class InvertibleConv1x1(nn.Module):
     def __init__(self, num_channels):
-        super().__init__()
+        super(InvertibleConv1x1, self).__init__()
         w_shape = [num_channels, num_channels]
         w_init = np.linalg.qr(np.random.randn(*w_shape))[0].astype(np.float32)
         self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
@@ -492,14 +480,15 @@ class InvertibleConv1x1(nn.Module):
         """
         weight, dlogdet = self.get_weight(input)
         z = F.conv2d(input, weight)
-        if logdet is not None:
-            logdet = logdet - dlogdet
+        # if logdet is not None:
+        logdet = logdet - dlogdet
+
         return z, logdet
 
 
 class CondAffineSeparatedAndCond(nn.Module):
     def __init__(self, in_channels):
-        super().__init__()
+        super(CondAffineSeparatedAndCond, self).__init__()
         self.need_features = True
         self.in_channels = in_channels
         self.in_channels_rrdb = 64  # opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
@@ -530,20 +519,19 @@ class CondAffineSeparatedAndCond(nn.Module):
         )
         # in_channels = 12
 
-
-    def forward(self, input, logdet, rrdbResults) -> List[torch.Tensor]:
+    def forward(self, input, logdet, rrdb) -> List[torch.Tensor]:
         z = input
 
         # Self Conditional
         z1, z2 = self.split(z)
-        scale, shift = self.feature_extract_aff(z1, rrdbResults)
+        scale, shift = self.feature_extract_aff(z1, rrdb)
         z2 = z2 / scale
         z2 = z2 - shift
         z = torch.cat((z1, z2), dim=1)
         logdet = logdet - self.get_logdet(scale)
 
         # Feature Conditional
-        scaleFt, shiftFt = self.feature_extract(rrdbResults)
+        scaleFt, shiftFt = self.feature_extract(rrdb)
         z = z / scaleFt
         z = z - shiftFt
         logdet = logdet - self.get_logdet(scaleFt)
@@ -561,7 +549,7 @@ class CondAffineSeparatedAndCond(nn.Module):
             if isinstance(layer, (Conv2d, Conv2dZeros)):
                 h = layer.more_forward(h)
             else:
-                h = layer(h)            
+                h = layer(h)
 
         shift, scale = thops.split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
@@ -629,7 +617,7 @@ class Conv2d(nn.Conv2d):
         weight_std=0.05,
     ):
         padding = Conv2d.get_padding(padding, kernel_size, stride)
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, bias=False)
+        super(Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, bias=False)
         # init weight with std
         self.weight.data.normal_(mean=0.0, std=weight_std)
         self.actnorm = ActNorm2d(out_channels)
@@ -643,7 +631,7 @@ class Conv2d(nn.Conv2d):
 class Conv2dZeros(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding="same"):
         padding = Conv2d.get_padding(padding, kernel_size, stride)
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding)
+        super(Conv2dZeros, self).__init__(in_channels, out_channels, kernel_size, stride, padding)
         self.logscale_factor = 3.0
         self.register_parameter("logs", nn.Parameter(torch.zeros(out_channels, 1, 1)))
         self.weight.data.zero_()
@@ -651,7 +639,7 @@ class Conv2dZeros(nn.Conv2d):
 
     def more_forward(self, input):
         output = self.forward(input)
-        return output * torch.exp(self.logs * self.logscale_factor) # more ...
+        return output * torch.exp(self.logs * self.logscale_factor)  # more ...
 
 
 def f_conv2d_bias(in_channels, out_channels):
@@ -669,7 +657,7 @@ def f_conv2d_bias(in_channels, out_channels):
 
 class FakeAffineSeparatedAndCond(nn.Module):
     def __init__(self, in_channels):
-        super().__init__()
+        super(FakeAffineSeparatedAndCond, self).__init__()
 
-    def forward(self, input, logdet, rrdbResults) -> List[torch.Tensor]:
+    def forward(self, input, logdet, rrdb) -> List[torch.Tensor]:
         return input, logdet
