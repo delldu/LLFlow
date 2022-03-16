@@ -49,6 +49,7 @@ def model_load(model, path):
             target_state_dict[n].copy_(p)
         else:
             raise KeyError(n)
+    torch.save(model.state_dict(), "/tmp/image_light.pth")
 
 
 def get_model():
@@ -59,10 +60,12 @@ def get_model():
     checkpoint = model_path if cdir == "" else cdir + "/" + model_path
 
     model = llflow.LLFlow()
-    model_load(model, checkpoint)
+    # model_load(model, checkpoint)
+    todos.model.load(model, "/tmp/image_light.pth")
     device = todos.model.get_device()
     model = model.to(device)
     model.eval()
+
 
     # model = torch.jit.script(model)
 
