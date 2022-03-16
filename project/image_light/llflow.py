@@ -20,19 +20,19 @@ import functools
 import numpy as np
 
 from . import thops
+
 from typing import List
-from typing import Optional
 from typing import Dict
 
 import pdb
 
 
 class LLFlow(nn.Module):
-    def __init__(self, in_nc=3, out_nc=3, nf=32, nb=4, gc=32, scale=1, K=4):
+    def __init__(self, in_nc=3, out_nc=3, nf=32, nb=4, gc=32):
         super(LLFlow, self).__init__()
-        self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc, scale)
+        self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc)
         hidden_channels = 64
-        self.flowUpsamplerNet = FlowUpsamplerNet((160, 160, 3), hidden_channels, K)
+        self.flowUpsamplerNet = FlowUpsamplerNet((160, 160, 3), hidden_channels)
         self.max_pool = nn.MaxPool2d(3)
 
     def forward(self, x):
@@ -70,7 +70,7 @@ class LLFlow(nn.Module):
 
 
 class FlowUpsamplerNet(nn.Module):
-    def __init__(self, image_shape, hidden_channels, K):
+    def __init__(self, image_shape, hidden_channels):
         super(FlowUpsamplerNet, self).__init__()
 
         self.hr_size = 160  # opt['datasets']['train']['GT_size']
@@ -87,47 +87,39 @@ class FlowUpsamplerNet(nn.Module):
         }
 
         # self.C, H, W -- (3, 160, 160)
-        self.layer_list = []
-        self.output_shapes: List[int] = []        
+        layer_list = []
+        self.output_shapes: List[int] = []
         for level in range(1, self.L + 1):
-            H, W = self.init_Squeeze(H, W)
-            self.init_FlowAffine(H, hidden_channels)
-            self.init_FlowStep(H, self.K[level], hidden_channels)
+            # init_Squeeze
+            self.C, H, W = self.C * 4, H // 2, W // 2
+            layer_list.append(SqueezeLayer(factor=2))
+            self.output_shapes.append(H)
+
+            # init_FlowAffine
+            # 2 -- int(opt['network_G']['flow']['additionalFlowNoAffine'])
+            for _ in range(2):
+                layer_list.append(
+                    FlowStep(
+                        in_channels=self.C,
+                        hidden_channels=hidden_channels,
+                        flow_coupling="noCoupling",
+                    )
+                )
+                self.output_shapes.append(H)
+            # init_FlowStep
+            for k in range(self.K[level]):
+                layer_list.append(
+                    FlowStep(
+                        in_channels=self.C,
+                        hidden_channels=hidden_channels,
+                        flow_coupling="CondAffineSeparatedAndCond",
+                    )
+                )
+                self.output_shapes.append(H)
+
         # self.C, H, W -- (192, 20, 20)
-
-        self.layers = nn.Sequential(*self.layer_list)
-
+        self.layers = nn.Sequential(*reversed([l for l in layer_list]))
         self.f = f_conv2d_bias(128, 2 * 3 * 64)  # 128 -- self.get_affineInCh(opt_get)
-
-    def init_FlowStep(self, H, K, hidden_channels):
-        for k in range(K):
-            self.layer_list.append(
-                FlowStep(
-                    in_channels=self.C,
-                    hidden_channels=hidden_channels,
-                    flow_coupling="CondAffineSeparatedAndCond",
-                )
-            )
-            self.output_shapes.append(H)
-
-    def init_FlowAffine(self, H, hidden_channels):
-        K = 2  # int(opt['network_G']['flow']['additionalFlowNoAffine'])
-        for _ in range(K):
-            self.layer_list.append(
-                FlowStep(
-                    in_channels=self.C,
-                    hidden_channels=hidden_channels,
-                    flow_coupling="noCoupling",
-                )
-            )
-
-            self.output_shapes.append(H)
-
-    def init_Squeeze(self, H, W):
-        self.C, H, W = self.C * 4, H // 2, W // 2
-        self.layer_list.append(SqueezeLayer(factor=2))
-        self.output_shapes.append(H)
-        return H, W
 
     def forward(self, rrdbResults: Dict[str, torch.Tensor], color_map, logdet):
         level_conditionals: Dict[int, torch.Tensor] = {}
@@ -139,19 +131,13 @@ class FlowUpsamplerNet(nn.Module):
                 level_conditionals[level] = rrdbResults[self.levelToName[level]]
 
         length = len(self.layers)
-        for index in range(length):
-            k = length - 1 - index
-            layer = self.layers[k]
-            size = self.output_shapes[k]
-
+        for index, layer in enumerate(self.layers):
+            size = self.output_shapes[length - 1 - index]
             level = int(math.log(self.hr_size / size) / math.log(2))
 
-            # FlowStep, SqueezeLayer
-            if isinstance(layer, FlowStep):
-                color_map, logdet = layer(color_map, logdet, level_conditionals[level])
-            else:  # isinstance(layer, SqueezeLayer):
-                color_map = layer(color_map)  # SqueezeLayer
-
+            x: List[torch.Tensor] = [color_map, logdet, level_conditionals[level]]
+            y = layer(x)
+            color_map, logdet = y[0], y[1]
         return color_map
 
 
@@ -165,8 +151,6 @@ class ResidualDenseBlock_5C(nn.Module):
         self.conv4 = nn.Conv2d(nf + 3 * gc, gc, 3, 1, 1, bias=bias)
         self.conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=bias)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-
-        # ==> pdb.set_trace()
         # nf = 32
         # gc = 32
         # bias = True
@@ -199,23 +183,22 @@ class RRDB(nn.Module):
 
 
 class ConEncoder1(nn.Module):
-    def __init__(self, in_nc, out_nc, nf, nb, gc=32, scale=1):
+    def __init__(self, in_nc, out_nc, nf, nb, gc=32):
         super(ConEncoder1, self).__init__()
 
-        in_nc = in_nc + 3  # concat_histeq
-        in_nc = in_nc + 6
+        in_nc = in_nc + 3  # concat histeq ==> 6
+        in_nc = in_nc + 6  # Add flow channels ==> 12
         RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
-        self.scale = scale
 
         self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
         self.conv_second = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.RRDB_trunk = make_layer(RRDB_block_f, nb)
         self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+
         #### downsampling
         self.downconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.downconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.downconv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        # self.downconv4 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
 
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
@@ -228,9 +211,8 @@ class ConEncoder1(nn.Module):
         # nf = 32
         # nb = 4
         # gc = 32
-        # scale = 1
 
-    def forward(self, x):
+    def forward(self, x) -> Dict[str, torch.Tensor]:
         raw_low_input = x[:, 0:3].exp()
         awb_weight = 1  # (1 + self.awb_para(fea_for_awb).unsqueeze(2).unsqueeze(3))
         low_after_awb = raw_low_input * awb_weight
@@ -267,7 +249,6 @@ class ConEncoder1(nn.Module):
             "last_lr_fea": fea_down4,
             "color_map": self.fine_tune_color_map(F.interpolate(fea_down2, scale_factor=2.0)),
         }
-
         for k, v in block_results.items():
             results[k] = v
         return results
@@ -315,9 +296,10 @@ class SqueezeLayer(nn.Module):
         super(SqueezeLayer, self).__init__()
         self.factor = factor
 
-    def forward(self, input):
+    def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
+        input, logdet, rrdb = x[0], x[1], x[2]
         output = unsqueeze2d(input, self.factor)
-        return output
+        return output, logdet
 
 
 class FlowStep(nn.Module):
@@ -337,12 +319,14 @@ class FlowStep(nn.Module):
         else:
             self.affine = FakeAffineSeparatedAndCond(in_channels=in_channels)
 
-    def forward(self, input, logdet, rrdb) -> List[torch.Tensor]:
+    def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
+        input, logdet, rrdb = x[0], x[1], x[2]
+
         # 1.coupling
         input, logdet = self.affine(input, logdet, rrdb)
 
         # 2. permute
-        input, logdet = self.invconv(input, logdet)
+        input, logdet = self.invconv([input, logdet])
 
         # 3. actnorm
         input, logdet = self.actnorm(input, logdet, True)  # reverse=True
@@ -408,8 +392,10 @@ class ActNorm2d(nn.Module):
             input = input * torch.exp(-logs)
         return input
 
-    def less_forward(self, input, reverse: bool = False):
+    def less_forward(self, input):
         """logdet is None"""
+
+        reverse: bool = False
         if not reverse:
             # center and scale
             input = self._center(input, reverse)
@@ -437,7 +423,8 @@ class InvertibleConv1x1(nn.Module):
 
         return weight, dlogdet
 
-    def forward(self, input, logdet) -> List[torch.Tensor]:
+    def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
+        input, logdet = x[0], x[1]
         """
         log-det = log|abs(|W|)| * pixels
         """
@@ -623,3 +610,18 @@ class FakeAffineSeparatedAndCond(nn.Module):
 
     def forward(self, input, logdet, rrdb) -> List[torch.Tensor]:
         return input, logdet
+
+
+if __name__ == "__main__":
+    # model = nn.Sequential(SqueezeLayer(factor=2))
+    # model = torch.jit.script(model)
+
+    # noCoupling
+    # model = nn.Sequential(FlowStep(in_channels=12, hidden_channels=64, flow_coupling = "noCoupling"))
+
+    # model = nn.Sequential(FlowStep(in_channels=12, hidden_channels=64, flow_coupling = "CondAffineSeparatedAndCond"))
+
+    model = LLFlow()
+    model = torch.jit.script(model)
+
+    pdb.set_trace()

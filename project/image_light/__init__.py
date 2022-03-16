@@ -26,6 +26,31 @@ import pdb
 LIGHT_ZEROPAD_TIMES = 8
 
 
+def model_load(model, path):
+    """Load model."""
+
+    def reverse_layer_name(n):
+        if n.find("flowUpsamplerNet.layers.") < 0:
+            return n
+        a = n.split(".")
+        a[2] = str(20 - int(a[2]))
+        return ".".join(a)
+
+    if not os.path.exists(path):
+        raise IOError(f"Model checkpoint '{path}' doesn't exist.")
+
+    # state_dict = torch.load(path, map_location=lambda storage, loc: storage)
+    state_dict = torch.load(path, map_location=torch.device("cpu"))
+    target_state_dict = model.state_dict()
+
+    for n, p in state_dict.items():
+        n = reverse_layer_name(n)
+        if n in target_state_dict.keys():
+            target_state_dict[n].copy_(p)
+        else:
+            raise KeyError(n)
+
+
 def get_model():
     """Create model."""
 
@@ -34,7 +59,7 @@ def get_model():
     checkpoint = model_path if cdir == "" else cdir + "/" + model_path
 
     model = llflow.LLFlow()
-    todos.model.load(model, checkpoint)
+    model_load(model, checkpoint)
     device = todos.model.get_device()
     model = model.to(device)
     model.eval()
