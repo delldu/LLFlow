@@ -34,7 +34,19 @@ def model_load(model, path):
             return n
         a = n.split(".")
         a[2] = str(20 - int(a[2]))
-        return ".".join(a)
+        n = ".".join(a)
+        # skip flowUpsamplerNet.layers.3.affine.fAffine.0.actnorm.bias
+        if n.find('actnorm') >= 0:
+            return n
+
+        # flowUpsamplerNet.layers.3.affine.fAffine.2.weight -->
+        # 
+        # 'flowUpsamplerNet.layers.16.affine.fAffine.4.stdconv.bias', 
+        # 'flowUpsamplerNet.layers.16.affine.fFeatures.0.stdconv.weight'
+        if (n.find('fAffine') > 0 or n.find('fFeatures') > 0) and (n.find('weight') > 0 or n.find('bias') > 0) :
+            n = n.replace('weight', 'stdconv.weight')
+            n = n.replace('bias', 'stdconv.bias')
+        return n
 
     if not os.path.exists(path):
         raise IOError(f"Model checkpoint '{path}' doesn't exist.")
@@ -44,11 +56,13 @@ def model_load(model, path):
     target_state_dict = model.state_dict()
 
     for n, p in state_dict.items():
-        n = reverse_layer_name(n)
-        if n in target_state_dict.keys():
-            target_state_dict[n].copy_(p)
+        m = reverse_layer_name(n)
+        if m in target_state_dict.keys():
+            target_state_dict[m].copy_(p)
         else:
-            raise KeyError(n)
+            # print(m)
+            raise KeyError(m)
+
     torch.save(model.state_dict(), "/tmp/image_light.pth")
 
 
@@ -60,14 +74,14 @@ def get_model():
     checkpoint = model_path if cdir == "" else cdir + "/" + model_path
 
     model = llflow.LLFlow()
-    # model_load(model, checkpoint)
-    todos.model.load(model, "/tmp/image_light.pth")
+    model_load(model, checkpoint)
+    # todos.model.load(model, "/tmp/image_light.pth")
     device = todos.model.get_device()
     model = model.to(device)
     model.eval()
 
 
-    # model = torch.jit.script(model)
+    model = torch.jit.script(model)
 
     # # todos.data.mkdir("output")
     # if not os.path.exists("output/image_light.torch"):
