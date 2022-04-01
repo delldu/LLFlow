@@ -19,16 +19,11 @@ import torchvision.transforms.functional as TF
 import functools
 import numpy as np
 
-
 from typing import List
 from typing import Dict
 
 import pdb
 
-def debug_script(input):
-    # print("  mean ", input.mean().item())
-    # print("  std ", input.std().item())
-    pass
 
 def thops_sum(tensor, dim: List[int]):
     dim = sorted(dim)
@@ -37,6 +32,7 @@ def thops_sum(tensor, dim: List[int]):
     for i, d in enumerate(dim):
         tensor.squeeze_(d - i)
     return tensor
+
 
 def thops_split_cross(tensor) -> List[torch.Tensor]:
     return tensor[:, 0::2, ...], tensor[:, 1::2, ...]
@@ -63,8 +59,6 @@ class LLFlow(nn.Module):
         rrdbResults = self.rrdbPreprocessing(lr)
         color_map = squeeze2d(rrdbResults["color_map"], 8)
         y = self.flowUpsamplerNet(rrdbResults, color_map, logdet)
-        print("y --- ")
-        debug_script(y)
 
         return y.clamp(0.0, 1.0)
 
@@ -137,7 +131,7 @@ class FlowUpsamplerNet(nn.Module):
 
         # self.C, H, W -- (192, 20, 20)
         self.layers = nn.Sequential(*reversed([l for l in layer_list]))
-        self.f = f_conv2d_bias(128, 2 * 3 * 64)  # 128 -- self.get_affineInCh(opt_get)
+        # self.f = f_conv2d_bias(128, 2 * 3 * 64)  # 128 -- self.get_affineInCh(opt_get)
 
     def forward(self, rrdbResults: Dict[str, torch.Tensor], color_map, logdet):
         level_conditionals: Dict[int, torch.Tensor] = {}
@@ -153,9 +147,8 @@ class FlowUpsamplerNet(nn.Module):
             size = self.output_shapes[length - 1 - index]
             level = int(math.log(self.hr_size / size) / math.log(2))
 
-            print("level --- ", level, self.levelToName[level])
             x: List[torch.Tensor] = [color_map, logdet, level_conditionals[level]]
-            y = layer(x) # SqueezeLayer, FlowStep
+            y = layer(x)  # SqueezeLayer, FlowStep
             color_map, logdet = y[0], y[1]
         return color_map
 
@@ -318,14 +311,6 @@ class SqueezeLayer(nn.Module):
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         input, logdet, rrdb = x[0], x[1], x[2]
         output = unsqueeze2d(input, self.factor)
-
-        print("SqueezeLayer input -- ")
-        debug_script(input)
-        print("SqueezeLayer logdet -- ")
-        debug_script(logdet);
-        print("SqueezeLayer output -- ")
-        debug_script(output)
-
         return output, logdet
 
 
@@ -348,34 +333,15 @@ class FlowStep(nn.Module):
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         input, logdet, rrdb = x[0], x[1], x[2]
-        print("FlowStep input -- ")
-        debug_script(input)
-        print("FlowStep logdet -- ")
-        debug_script(logdet)
 
         # 1.coupling
         input, logdet = self.affine([input, logdet, rrdb])
 
-        print("FlowStep affine input -- ")
-        debug_script(input)
-        print("FlowStep affine logdet -- ")
-        debug_script(logdet)
-
         # 2. permute
         input, logdet = self.invconv([input, logdet])
-        print("FlowStep invconv input -- ")
-        debug_script(input)
-        print("FlowStep invconv logdet -- ")
-        debug_script(logdet)
-
 
         # 3. actnorm
         input, logdet = self.actnorm(input, logdet, True)  # reverse=True
-
-        print("FlowStep actnorm output -- ")
-        debug_script(input)
-        print("FlowStep actnorm logdet -- ")
-        debug_script(logdet)
 
         return input, logdet
 
@@ -503,19 +469,18 @@ class CondAffineSeparatedAndCond(nn.Module):
         #     hidden_channels=self.hidden_channels,
         # )
 
-        in_channels=self.channels_for_nn + self.in_channels_rrdb
-        out_channels=self.channels_for_co * 2
-        hidden_channels=self.hidden_channels
+        in_channels = self.channels_for_nn + self.in_channels_rrdb
+        out_channels = self.channels_for_co * 2
+        hidden_channels = self.hidden_channels
 
         layers = [
             Conv2dOnes(in_channels, hidden_channels, kernel_size=[3, 3], stride=[1, 1]),
             nn.ReLU(inplace=False),
             Conv2dOnes(hidden_channels, hidden_channels, kernel_size=[1, 1]),
             nn.ReLU(inplace=False),
-            Conv2dZeros(hidden_channels, out_channels)
+            Conv2dZeros(hidden_channels, out_channels),
         ]
         self.fAffine = nn.Sequential(*layers)
-
 
         # self.fFeatures = self.F(
         #     in_channels=self.in_channels_rrdb,
@@ -523,18 +488,17 @@ class CondAffineSeparatedAndCond(nn.Module):
         #     hidden_channels=self.hidden_channels,
         # )
 
-        in_channels=self.in_channels_rrdb
-        out_channels=self.in_channels * 2
-        hidden_channels=self.hidden_channels
+        in_channels = self.in_channels_rrdb
+        out_channels = self.in_channels * 2
+        hidden_channels = self.hidden_channels
         layers = [
             Conv2dOnes(in_channels, hidden_channels, kernel_size=[3, 3], stride=[1, 1]),
             nn.ReLU(inplace=False),
             Conv2dOnes(hidden_channels, hidden_channels, kernel_size=[1, 1]),
             nn.ReLU(inplace=False),
-            Conv2dZeros(hidden_channels, out_channels)
+            Conv2dZeros(hidden_channels, out_channels),
         ]
         self.fFeatures = nn.Sequential(*layers)
-
 
         # in_channels = 12
 
@@ -549,15 +513,7 @@ class CondAffineSeparatedAndCond(nn.Module):
     #     return nn.Sequential(*layers)
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
-        input, logdet, rrdb = x[0], x[1], x[2]
-
-        # pdb.set_trace()
-        # input.size(), logdet.size(), rrdb.size()
-        print("CondAffineSeparatedAndCond:", self.channels_for_nn, input.size(), logdet.size(), rrdb.size())
-        z = input
-
-        print("CondAffineSeparatedAndCond input", )
-        debug_script(input)
+        z, logdet, rrdb = x[0], x[1], x[2]
 
         # Self Conditional
         z1, z2 = self.split(z)
@@ -574,95 +530,32 @@ class CondAffineSeparatedAndCond(nn.Module):
         z = z - shiftFt
         logdet = logdet - self.get_logdet(scaleFt)
 
-        output = z
-
-        # xxxx8888
-        print("CondAffineSeparatedAndCond output")
-        debug_script(output)
-
-        return output, logdet
+        return z, logdet
 
     def get_logdet(self, scale):
         return thops_sum(torch.log(scale), dim=[1, 2, 3])
 
     def feature_extract(self, z) -> List[torch.Tensor]:
-        # h = self.fFeatures(z)
-        print("feature_extract input --- ")
-        debug_script(z)
-
-        h = z
-        # xxxx8888
-        print("---- self.fFeatures begin --------------------------------------", len(self.fFeatures))
-        for index, layer in enumerate(self.fFeatures):
-            print("---- self.fFeatures index --------------------------------------",index)
-            if torch.jit.isinstance(layer, Conv2dOnes):
-                print("Conv2dOnes *************")           
-                h = layer(h)
-            elif torch.jit.isinstance(layer, Conv2dZeros):
-                print("Conv2dZeros *************")           
-                h = layer(h)
-            else:
-                print("standard nn module")
-                h = layer(h)  # nn.Conv2d, nn.ReLU
-        print("---- self.fFeatures end   --------------------------------------")
+        h = self.fFeatures(z)
 
         shift, scale = thops_split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
-
-        print("feature_extract output --- ")
-        debug_script(scale)
-        debug_script(shift)
 
         return scale, shift
 
     def feature_extract_aff(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         z1, ft = x[0], x[1]
-        print("feature_extract_aff input ---")
-        debug_script(z1)
-        debug_script(ft)
 
         z = torch.cat([z1, ft], dim=1)
-
-        # h = self.fAffine(z)
-        h = z
-        # xxxx8888
-        print("self.fAffine begin --------------------------------------", len(self.fAffine))
-        for index, layer in enumerate(self.fAffine):
-            print("---- self.fAffine index --------------------------------------",index)
-            if torch.jit.isinstance(layer, Conv2dOnes):
-                print("Conv2dOnes *************")
-                h = layer(h)
-            elif torch.jit.isinstance(layer, Conv2dZeros):
-                print("Conv2dZeros *************")
-                h = layer(h)
-            else:
-                print("Standard nn module")
-                h = layer(h) # nn.Conv2d, nn.ReLU
-            # if index == 0 or index == 2 or index == 4:
-            #     h = layer.more_forward(h)
-            # else:
-            #     print("Standard nn module")
-            #     h = layer(h) # nn.Conv2d, nn.ReLU
-
-
-        print("self.fAffine end   --------------------------------------")
-
+        h = self.fAffine(z)
         shift, scale = thops_split_cross(h)
         scale = torch.sigmoid(scale + 2.0) + self.affine_eps
-
-        print("feature_extract_aff output ---")
-        debug_script(scale)
-        debug_script(shift)
 
         return scale, shift
 
     def split(self, z) -> List[torch.Tensor]:
-        print("z-size: ", z.size(), "self.channels_for_nn -- ", self.channels_for_nn)
-
         z1 = z[:, : self.channels_for_nn]
         z2 = z[:, self.channels_for_nn :]
-
-        print("split size: ", z1.size(), z2.size())
         return z1, z2
 
 
@@ -685,80 +578,22 @@ def get_padding(padding, kernel_size, stride):
             raise ValueError("{} is not supported".format(padding))
     return padding
 
-# class Conv2dOnes(nn.Conv2d):
-#     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding_mode="same"):
-#         padding = get_padding(padding_mode, kernel_size, stride)               
-#         super(Conv2dOnes, self).__init__(in_channels, out_channels, kernel_size, stride, padding, bias=False)
-
-#         # init weight with std
-#         weight_std=0.05
-
-#         self.weight.data.normal_(mean=0.0, std=weight_std)
-#         self.actnorm = ActNorm2d(out_channels)        
-
-#     # def more_forward(self, input):
-#     #     print("Conv2dOnes --- ")
-#     #     debug_script(input)
-
-#     #     x = self.forward(input)
-#     #     print("Conv2dOnes forward ---")
-#     #     debug_script(x)
-
-#     #     x = self.actnorm.less_forward(x, False)  # less is more ...
-#     #     print("Conv2dOnes Actnorm ---")
-#     #     debug_script(x)
-
-#     #     return x
 
 class Conv2dOnes(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding_mode="same"):
         super(Conv2dOnes, self).__init__()
 
-        padding = get_padding(padding_mode, kernel_size, stride)               
+        padding = get_padding(padding_mode, kernel_size, stride)
         self.stdconv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False)
 
         # init weight with std
-        weight_std=0.05
+        weight_std = 0.05
         self.stdconv.weight.data.normal_(mean=0.0, std=weight_std)
-        self.actnorm = ActNorm2d(out_channels)        
+        self.actnorm = ActNorm2d(out_channels)
 
     def forward(self, input):
-        print("Conv2dOnes --- ")
-        debug_script(input)
-
         x = self.stdconv(input)
-        print("Conv2dOnes forward ---")
-        debug_script(x)
-
-        x = self.actnorm.less_forward(x, False)  # less is more ...
-        print("Conv2dOnes Actnorm ---")
-        debug_script(x)
-
-        return x
-
-
-
-# class Conv2dZeros(nn.Conv2d):
-#     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding_mode="same"):
-#         padding = get_padding(padding_mode, kernel_size, stride)
-#         super(Conv2dZeros, self).__init__(in_channels, out_channels, kernel_size, stride, padding)
-#         self.logscale_factor = 3.0
-#         self.register_parameter("logs", nn.Parameter(torch.zeros(out_channels, 1, 1)))
-#         self.weight.data.zero_()
-#         self.bias.data.zero_()
-
-#     # def more_forward(self, input):
-#     #     print("Conv2dZeros input ---")
-#     #     debug_script(input)
-#     #     output = self.forward(input)
-#     #     print("Conv2dZeros output ---")
-#     #     debug_script(output)
-
-#     #     output =  output * torch.exp(self.logs * self.logscale_factor)  # more ...
-#     #     print("Conv2dZeros output 2---")
-#     #     debug_script(output)
-
-#     #     return output
+        return self.actnorm.less_forward(x, False)  # less is more ...
 
 
 class Conv2dZeros(nn.Module):
@@ -774,30 +609,8 @@ class Conv2dZeros(nn.Module):
         self.stdconv.bias.data.zero_()
 
     def forward(self, input):
-        print("Conv2dZeros input ---")
-        debug_script(input)
         output = self.stdconv(input)
-        print("Conv2dZeros output ---")
-        debug_script(output)
-
-        output =  output * torch.exp(self.logs * self.logscale_factor)  # more ...
-        print("Conv2dZeros output 2---")
-        debug_script(output)
-
-        return output
-
-
-def f_conv2d_bias(in_channels, out_channels):
-    def padding_same(kernel, stride):
-        return [((k - 1) * s + 1) // 2 for k, s in zip(kernel, stride)]
-
-    padding = padding_same([3, 3], [1, 1])
-    assert padding == [1, 1], padding
-    return nn.Sequential(
-        nn.Conv2d(
-            in_channels=in_channels, out_channels=out_channels, kernel_size=[3, 3], stride=1, padding=1, bias=True
-        )
-    )
+        return output * torch.exp(self.logs * self.logscale_factor)  # more ...
 
 
 class FakeAffineSeparatedAndCond(nn.Module):
@@ -806,32 +619,4 @@ class FakeAffineSeparatedAndCond(nn.Module):
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         input, logdet, rrdb = x[0], x[1], x[2]
-        print("class_name: FakeAffineSeparatedAndCond")
-
         return input, logdet
-
-
-if __name__ == "__main__":
-    # model = nn.Sequential(SqueezeLayer(factor=2))
-    # model = torch.jit.script(model)
-
-    # noCoupling
-    # model = nn.Sequential(FlowStep(in_channels=12, hidden_channels=64, flow_coupling = "noCoupling"))
-
-    # model = nn.Sequential(FlowStep(in_channels=12, hidden_channels=64, flow_coupling = "CondAffineSeparatedAndCond"))
-
-
-    input = torch.randn(1, 192, 50, 75)
-    logdet = torch.randn(1)
-    rrdb = torch.randn(1, 64, 50, 75)
-
-    model = CondAffineSeparatedAndCond(in_channels=96)
-    model = model.fAffine
-
-    # y = model(input, logdet, rrdb)
-    # print("normal  y -- ", y.mean())
-
-    model = torch.jit.script(model)
-    # print("script y -- ", y.mean())
-
-    pdb.set_trace()
