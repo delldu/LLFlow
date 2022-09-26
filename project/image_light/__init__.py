@@ -23,9 +23,6 @@ from . import llflow
 import pdb
 
 
-LIGHT_ZEROPAD_TIMES = 8
-
-
 def model_load(model, path):
     """Load model."""
 
@@ -35,7 +32,7 @@ def model_load(model, path):
         a = n.split(".")
         a[2] = str(20 - int(a[2]))
         n = ".".join(a)
-        
+
         # skip flowUpsamplerNet.layers.3.affine.fAffine.0.actnorm.bias
         if n.find("actnorm") >= 0:
             return n
@@ -52,13 +49,12 @@ def model_load(model, path):
     if not os.path.exists(path):
         raise IOError(f"Model checkpoint '{path}' doesn't exist.")
 
-    # state_dict = torch.load(path, map_location=lambda storage, loc: storage)
     state_dict = torch.load(path, map_location=torch.device("cpu"))
     target_state_dict = model.state_dict()
 
     for n, p in state_dict.items():
         # skip flowUpsamplerNet.f.0.weight etc ...
-        if n.find('flowUpsamplerNet.f') >= 0:
+        if n.find("flowUpsamplerNet.f") >= 0:
             continue
 
         m = reverse_layer_name(n)
@@ -85,6 +81,7 @@ def get_model():
     model = model.to(device)
     model.eval()
 
+    print(f"Running on {device} ...")
     model = torch.jit.script(model)
 
     todos.data.mkdir("output")
@@ -94,12 +91,16 @@ def get_model():
     return model, device
 
 
-def model_forward(model, device, input_tensor):
+def model_forward(model, device, input_tensor, multi_times=8):
     # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)
-    if H % LIGHT_ZEROPAD_TIMES != 0 or W % LIGHT_ZEROPAD_TIMES != 0:
-        input_tensor = todos.data.zeropad_tensor(input_tensor, times=LIGHT_ZEROPAD_TIMES)
-    output_tensor = todos.model.forward(model, device, input_tensor)
+    if H % multi_times != 0 or W % multi_times != 0:
+        input_tensor = todos.data.zeropad_tensor(input_tensor, times=multi_times)
+
+    torch.cuda.synchronize()
+    with torch.jit.optimized_execution(False):
+        output_tensor = todos.model.forward(model, device, input_tensor)
+    torch.cuda.synchronize()
 
     return output_tensor[:, :, 0:H, 0:W]
 
