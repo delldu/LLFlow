@@ -46,7 +46,7 @@ class LLFlow(nn.Module):
         self.flowUpsamplerNet = FlowUpsamplerNet((160, 160, 3), hidden_channels)
         # self.max_pool = nn.MaxPool2d(3)
 
-    def forward(self, x):
+    def forward_x(self, x):
         log_lr = torch.log(torch.clamp(x + 1e-3, min=1e-3))
         x255 = x * 255.0
         heq_lr = TF.equalize(x255.to(torch.uint8)).float() / 255.0
@@ -61,6 +61,42 @@ class LLFlow(nn.Module):
         y = self.flowUpsamplerNet(rrdbResults, color_map, logdet)
 
         return y.clamp(0.0, 1.0)
+
+    def forward(self, x):
+        # Define max GPU/CPU memory -- 2G
+        max_h = 1024
+        max_W = 1024
+        multi_times = 8
+
+        # Need Resize ?
+        B, C, H, W = x.size()
+        if H > max_h or W > max_W:
+            s = min(max_h / H, max_W / W)
+            SH, SW = int(s * H), int(s * W)
+            resize_x = F.interpolate(x, size=(SH, SW), mode="bilinear", align_corners=False)
+        else:
+            resize_x = x
+
+        # Need Zero Pad ?
+        ZH, ZW = resize_x.size(2), resize_x.size(3)
+        if ZH % multi_times != 0 or ZW % multi_times != 0:
+            NH = multi_times * math.ceil(ZH / multi_times)
+            NW = multi_times * math.ceil(ZW / multi_times)
+            resize_zeropad_x = resize_x.new_zeros(B, C, NH, NW)
+            resize_zeropad_x[:, :, 0:ZH, 0:ZW] = resize_x
+        else:
+            resize_zeropad_x = resize_x
+
+        # MS Begin
+        y = self.forward_x(resize_zeropad_x).cpu()
+        del resize_zeropad_x, resize_x  # Release memory !!!
+
+        y = y[:, :, 0:ZH, 0:ZW]  # Remove Zero Pads
+        if ZH != H or ZW != W:
+            y = F.interpolate(y, size=(H, W), mode="bilinear", align_corners=False)
+        # MS End
+
+        return y
 
     def rrdbPreprocessing(self, lr) -> Dict[str, torch.Tensor]:
         rrdbResults = self.RRDB(lr)
