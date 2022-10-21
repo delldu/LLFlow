@@ -88,7 +88,7 @@ class LLFlow(nn.Module):
             resize_zeropad_x = resize_x
 
         # MS Begin
-        y = self.forward_x(resize_zeropad_x).cpu()
+        y = self.forward_x(resize_zeropad_x)
         del resize_zeropad_x, resize_x  # Release memory !!!
 
         y = y[:, :, 0:ZH, 0:ZW]  # Remove Zero Pads
