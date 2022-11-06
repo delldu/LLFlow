@@ -65,7 +65,7 @@ def model_load(model, path):
     torch.save(model.state_dict(), "/tmp/image_light.pth")
 
 
-def get_model():
+def get_light_model():
     """Create model."""
 
     model_path = "models/image_light.pth"
@@ -94,7 +94,7 @@ def image_predict(input_files, output_dir):
     todos.data.mkdir(output_dir)
 
     # load model
-    model, device = get_model()
+    model, device = get_light_model()
 
     # load files
     image_filenames = todos.data.load_files(input_files)
