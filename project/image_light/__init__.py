@@ -21,6 +21,26 @@ from . import llflow
 import pdb
 
 
+def get_tvm_model():
+    """
+    TVM model base on torch.jit.trace
+    """
+
+    model_path = "models/image_light.pth"
+    cdir = os.path.dirname(__file__)
+    checkpoint = model_path if cdir == "" else cdir + "/" + model_path
+
+    model = llflow.LLFlow()
+    model_load(model, checkpoint)
+
+    device = todos.model.get_device()
+    model = model.to(device)
+    model.eval()
+    print(f"Running tvm model model on {device} ...")
+
+    return model, device
+
+
 def model_load(model, path):
     """Load model."""
 
@@ -75,6 +95,8 @@ def get_light_model():
     model = llflow.LLFlow()
     model_load(model, checkpoint)
     # todos.model.load(model, "/tmp/image_light.pth")
+    model = todos.model.ResizePadModel(model)
+
     device = todos.model.get_device()
     model = model.to(device)
     model.eval()
