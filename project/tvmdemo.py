@@ -29,14 +29,15 @@ def compile():
     if not os.path.exists("output/image_light.so"):
         input = torch.randn(SO_B, SO_C, SO_H, SO_W)
         todos.tvmod.compile(model, device, input, "output/image_light.so")
-
+    todos.model.reset_device()
 
 def predict(input_files, output_dir):
     # Create directory to store result
     todos.data.mkdir(output_dir)
 
     # load model
-    tvm_model = todos.tvmod.load("output/image_light.so", "cuda")
+    device = todos.model.get_device()
+    tvm_model = todos.tvmod.load("output/image_light.so", str(device))
 
     # load files
     image_filenames = todos.data.load_files(input_files)
@@ -57,7 +58,6 @@ def predict(input_files, output_dir):
 
         start_time = time.time()
         predict_tensor = todos.tvmod.forward(tvm_model, input_tensor)
-        torch.cuda.synchronize()
         mean_time += time.time() - start_time
 
         output_file = f"{output_dir}/{os.path.basename(filename)}"

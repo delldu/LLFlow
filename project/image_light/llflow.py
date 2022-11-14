@@ -43,8 +43,9 @@ class LLFlow(nn.Module):
         super(LLFlow, self).__init__()
         # Define max GPU/CPU memory -- 2G
         self.MAX_H = 1024
-        self.MAX_W = 1024
+        self.MAX_W = 2048
         self.MAX_TIMES = 8
+        # GPU 4G, 400ms
 
         self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc)
         hidden_channels = 64
