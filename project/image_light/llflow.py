@@ -3,13 +3,13 @@
 #
 # /************************************************************************************
 # ***
-# ***    Copyright 2020-2022 Dell(18588220928@163.com), All Rights Reserved.
+# ***    Copyright 2020-2024 Dell(18588220928@163.com), All Rights Reserved.
 # ***
 # ***    File Author: Dell, 2020年 09月 09日 星期三 23:56:45 CST
 # ***
 # ************************************************************************************/
 #
-
+import os
 import math
 
 import torch
@@ -19,10 +19,77 @@ import torchvision.transforms.functional as TF
 import functools
 import numpy as np
 
-from typing import List
-from typing import Dict
+from typing import List, Dict
 
 import pdb
+
+# def gray_histogram_equalization(image_tensor):
+#     B, C, H, W = image_tensor.size()
+
+#     hist = torch.histc(image_tensor, bins=256, min=0.0, max=255.0)
+#     cdf = hist.cumsum(dim=0)
+#     cdf = (cdf - cdf.min()) * 255.0 / (cdf.max() - cdf.min())
+#     cdf = cdf.to(torch.int64)
+#     image_tensor = image_tensor.to(torch.int64).flatten(start_dim=0)
+#     equalized_image = torch.gather(cdf, 0, image_tensor) # 0 -- dim
+
+#     return equalized_image.reshape(B, C, H, W).float()
+
+
+# def color_histogram_equalization(image_tensor):
+#     r = gray_histogram_equalization(image_tensor[:, 0:1, :, :])
+#     g = gray_histogram_equalization(image_tensor[:, 1:2, :, :])
+#     b = gray_histogram_equalization(image_tensor[:, 2:3, :, :])
+#     return torch.cat((r, g, b), dim=1)
+
+def model_load(model):
+    """Load model."""
+
+    def reverse_layer_name(n):
+        if n.find("flowUpsamplerNet.layers.") < 0:
+            return n
+        a = n.split(".")
+        a[2] = str(20 - int(a[2]))
+        n = ".".join(a)
+
+        # skip flowUpsamplerNet.layers.3.affine.fAffine.0.actnorm.bias
+        if n.find("actnorm") >= 0:
+            return n
+
+        # flowUpsamplerNet.layers.3.affine.fAffine.2.weight -->
+        #
+        # 'flowUpsamplerNet.layers.16.affine.fAffine.4.stdconv.bias',
+        # 'flowUpsamplerNet.layers.16.affine.fFeatures.0.stdconv.weight'
+        if (n.find("fAffine") > 0 or n.find("fFeatures") > 0) and (n.find("weight") > 0 or n.find("bias") > 0):
+            n = n.replace("weight", "stdconv.weight")
+            n = n.replace("bias", "stdconv.bias")
+        return n
+
+
+    model_path = "models/image_light.pth"
+    cdir = os.path.dirname(__file__)
+    checkpoint = model_path if cdir == "" else cdir + "/" + model_path
+
+    if not os.path.exists(checkpoint):
+        raise IOError(f"Model checkpoint '{checkpoint}' doesn't exist.")
+
+    # state_dict = torch.load(checkpoint, map_location=torch.device("cpu"))
+    state_dict = torch.load(checkpoint)
+    target_state_dict = model.state_dict()
+
+    for n, p in state_dict.items():
+        # skip flowUpsamplerNet.f.0.weight etc ...
+        if n.find("flowUpsamplerNet.f") >= 0:
+            continue
+
+        m = reverse_layer_name(n)
+        if m in target_state_dict.keys():
+            target_state_dict[m].copy_(p)
+        else:
+            # print(m)
+            raise KeyError(m)
+
+    # torch.save(model.state_dict(), "/tmp/image_light.pth")
 
 
 def thops_sum(tensor, dim: List[int]):
@@ -40,27 +107,32 @@ def thops_split_cross(tensor) -> List[torch.Tensor]:
 
 class LLFlow(nn.Module):
     def __init__(self, in_nc=3, out_nc=3, nf=32, nb=4, gc=32):
-        super(LLFlow, self).__init__()
+        super().__init__()
         # Define max GPU/CPU memory -- 2G
         self.MAX_H = 1024
-        self.MAX_W = 2048
+        self.MAX_W = 1024
         self.MAX_TIMES = 8
-        # GPU 4G, 400ms
+        # GPU 2G, 400ms
 
         self.RRDB = ConEncoder1(in_nc, out_nc, nf, nb, gc)
         hidden_channels = 64
         self.flowUpsamplerNet = FlowUpsamplerNet((160, 160, 3), hidden_channels)
-        # self.max_pool = nn.MaxPool2d(3)
+
+        model_load(self)
 
     def forward(self, x):
+        x = x.clamp(0.0, 1.0)
+
         log_lr = torch.log(torch.clamp(x + 1e-3, min=1e-3))
         x255 = x * 255.0
+
         heq_lr = TF.equalize(x255.to(torch.uint8)).float() / 255.0
+        # heq_lr = color_histogram_equalization(x255)/255.0
+
         lr = torch.cat((log_lr, 0.5 * heq_lr.clamp(0, 1.0) + 0.5 * x), dim=1)
         # lr.size()-- [1, 6, 400, 600]
 
         logdet = torch.zeros_like(lr[:, 0, 0, 0])
-        # type(logdet) -- <class 'torch.Tensor'>, logdet.size() -- torch.Size([1])
 
         rrdbResults = self.rrdbPreprocessing(lr)
         color_map = squeeze2d(rrdbResults["color_map"], 8)
@@ -75,11 +147,13 @@ class LLFlow(nn.Module):
         block_idxs = [1]  # opt_get(self.opt, ['network_G', 'flow', 'stackRRDB', 'blocks']) or []
         low_level_features = [rrdbResults["block_{}".format(idx)] for idx in block_idxs]
         concat = torch.cat(low_level_features, dim=1)
+
         keys = ["last_lr_fea", "fea_up1", "fea_up2", "fea_up4"]
         if "fea_up0" in rrdbResults.keys():
             keys.append("fea_up0")
         if "fea_up-1" in rrdbResults.keys():
             keys.append("fea_up-1")
+
         for k in keys:
             h = rrdbResults[k].shape[2]
             w = rrdbResults[k].shape[3]
@@ -90,7 +164,7 @@ class LLFlow(nn.Module):
 
 class FlowUpsamplerNet(nn.Module):
     def __init__(self, image_shape, hidden_channels):
-        super(FlowUpsamplerNet, self).__init__()
+        super().__init__()
 
         self.hr_size = 160  # opt['datasets']['train']['GT_size']
         self.L = 3  # opt_get(opt, ['network_G', 'flow', 'L']) # 3
@@ -144,7 +218,7 @@ class FlowUpsamplerNet(nn.Module):
         level_conditionals: Dict[int, torch.Tensor] = {}
         for level in range(self.L + 1):
             if level not in self.levelToName.keys():
-                level_conditionals[level] = torch.randn(1, 3, 8, 8)  # None, Fake for torchscript compile
+                level_conditionals[level] = torch.randn(1, 3, 8, 8).to(logdet.device)  # None, Fake for torchscript compile
             else:
                 # level_conditionals[level] = rrdbResults[self.levelToName[level]] if rrdbResults else None
                 level_conditionals[level] = rrdbResults[self.levelToName[level]]
@@ -162,14 +236,14 @@ class FlowUpsamplerNet(nn.Module):
 
 class ResidualDenseBlock_5C(nn.Module):
     def __init__(self, nf=64, gc=32, bias=True):
-        super(ResidualDenseBlock_5C, self).__init__()
+        super().__init__()
         # gc: growth channel, i.e. intermediate channels
         self.conv1 = nn.Conv2d(nf, gc, 3, 1, 1, bias=bias)
         self.conv2 = nn.Conv2d(nf + gc, gc, 3, 1, 1, bias=bias)
         self.conv3 = nn.Conv2d(nf + 2 * gc, gc, 3, 1, 1, bias=bias)
         self.conv4 = nn.Conv2d(nf + 3 * gc, gc, 3, 1, 1, bias=bias)
         self.conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=bias)
-        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2)
         # nf = 32
         # gc = 32
         # bias = True
@@ -187,7 +261,7 @@ class RRDB(nn.Module):
     """Residual in Residual Dense Block"""
 
     def __init__(self, nf, gc=32):
-        super(RRDB, self).__init__()
+        super().__init__()
         self.RDB1 = ResidualDenseBlock_5C(nf, gc)
         self.RDB2 = ResidualDenseBlock_5C(nf, gc)
         self.RDB3 = ResidualDenseBlock_5C(nf, gc)
@@ -203,7 +277,7 @@ class RRDB(nn.Module):
 
 class ConEncoder1(nn.Module):
     def __init__(self, in_nc, out_nc, nf, nb, gc=32):
-        super(ConEncoder1, self).__init__()
+        super().__init__()
 
         in_nc = in_nc + 3  # concat histeq ==> 6
         in_nc = in_nc + 6  # Add flow channels ==> 12
@@ -221,7 +295,7 @@ class ConEncoder1(nn.Module):
 
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
-        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2)
 
         self.awb_para = nn.Linear(nf, 3)
         self.fine_tune_color_map = nn.Sequential(nn.Conv2d(nf, 3, 1, 1), nn.Sigmoid())
@@ -284,8 +358,8 @@ class ConEncoder1(nn.Module):
 
 
 def squeeze2d(input, factor: int):
-    if factor == 1:
-        return input
+    # if factor == 1:
+    #     return input
     B, C, H, W = input.shape
     x = input.view(B, C, H // factor, factor, W // factor, factor)
     x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
@@ -312,7 +386,7 @@ def unsqueeze2d(input, factor: int):
 
 class SqueezeLayer(nn.Module):
     def __init__(self, factor):
-        super(SqueezeLayer, self).__init__()
+        super().__init__()
         self.factor = factor
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
@@ -323,7 +397,7 @@ class SqueezeLayer(nn.Module):
 
 class FlowStep(nn.Module):
     def __init__(self, in_channels, hidden_channels, flow_coupling):
-        super(FlowStep, self).__init__()
+        super().__init__()
         self.flow_coupling = flow_coupling
 
         # 1. actnorm
@@ -359,7 +433,7 @@ class ActNorm2d(nn.Module):
     """
 
     def __init__(self, num_features):
-        super(ActNorm2d, self).__init__()
+        super().__init__()
         size = [1, num_features, 1, 1]
         self.register_parameter("bias", nn.Parameter(torch.zeros(*size)))
         self.register_parameter("logs", nn.Parameter(torch.zeros(*size)))
@@ -426,7 +500,7 @@ class ActNorm2d(nn.Module):
 
 class InvertibleConv1x1(nn.Module):
     def __init__(self, num_channels):
-        super(InvertibleConv1x1, self).__init__()
+        super().__init__()
         w_shape = [num_channels, num_channels]
         w_init = np.linalg.qr(np.random.randn(*w_shape))[0].astype(np.float32)
         self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
@@ -456,7 +530,7 @@ class InvertibleConv1x1(nn.Module):
 
 class CondAffineSeparatedAndCond(nn.Module):
     def __init__(self, in_channels):
-        super(CondAffineSeparatedAndCond, self).__init__()
+        super().__init__()
         # self.need_features = True
         self.in_channels = in_channels
         self.in_channels_rrdb = 64  # opt_get(opt, ['network_G', 'flow', 'conditionInFeaDim'], 320) # 64
@@ -482,9 +556,9 @@ class CondAffineSeparatedAndCond(nn.Module):
 
         layers = [
             Conv2dOnes(in_channels, hidden_channels, kernel_size=[3, 3], stride=[1, 1]),
-            nn.ReLU(inplace=False),
+            nn.ReLU(),
             Conv2dOnes(hidden_channels, hidden_channels, kernel_size=[1, 1]),
-            nn.ReLU(inplace=False),
+            nn.ReLU(),
             Conv2dZeros(hidden_channels, out_channels),
         ]
         self.fAffine = nn.Sequential(*layers)
@@ -500,9 +574,9 @@ class CondAffineSeparatedAndCond(nn.Module):
         hidden_channels = self.hidden_channels
         layers = [
             Conv2dOnes(in_channels, hidden_channels, kernel_size=[3, 3], stride=[1, 1]),
-            nn.ReLU(inplace=False),
+            nn.ReLU(),
             Conv2dOnes(hidden_channels, hidden_channels, kernel_size=[1, 1]),
-            nn.ReLU(inplace=False),
+            nn.ReLU(),
             Conv2dZeros(hidden_channels, out_channels),
         ]
         self.fFeatures = nn.Sequential(*layers)
@@ -588,7 +662,7 @@ def get_padding(padding, kernel_size, stride):
 
 class Conv2dOnes(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding_mode="same"):
-        super(Conv2dOnes, self).__init__()
+        super().__init__()
 
         padding = get_padding(padding_mode, kernel_size, stride)
         self.stdconv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False)
@@ -605,7 +679,7 @@ class Conv2dOnes(nn.Module):
 
 class Conv2dZeros(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1], padding_mode="same"):
-        super(Conv2dZeros, self).__init__()
+        super().__init__()
 
         padding = get_padding(padding_mode, kernel_size, stride)
         self.stdconv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
@@ -622,7 +696,7 @@ class Conv2dZeros(nn.Module):
 
 class FakeAffineSeparatedAndCond(nn.Module):
     def __init__(self, in_channels):
-        super(FakeAffineSeparatedAndCond, self).__init__()
+        super().__init__()
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         input, logdet, rrdb = x[0], x[1], x[2]

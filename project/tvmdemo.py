@@ -23,7 +23,7 @@ SO_B, SO_C, SO_H, SO_W = 1, 3, 512, 512
 # NotImplementedError: The following operators are not implemented: ['aten::copy_', 'aten::inverse', 'aten::histc']
 
 def compile():
-    model, device = image_light.get_tvm_model()
+    model, device = image_light.get_light_model()
 
     todos.data.mkdir("output")
     if not os.path.exists("output/image_light.so"):
